@@ -224,11 +224,7 @@ let appointments = [
 ];
 
 // barbearias disponíveis para o cliente escolher (com coordenadas p/ "mais próxima")
-let barbershops = [
-  { id:"sh1", nome:"SeuBarba Centro", bairro:"Centro", lat:-23.5505, lng:-46.6333, barbers:["b1","b2"], slots:true },
-  { id:"sh2", nome:"Studio Alpha", bairro:"Pinheiros", lat:-23.5645, lng:-46.7019, barbers:["b1"], slots:true },
-  { id:"sh3", nome:"Don Barber", bairro:"Moema", lat:-23.6010, lng:-46.6630, barbers:["b2"], slots:false },
-];
+let barbershops = [];
 function distKm(la1,lo1,la2,lo2){ const R=6371,toR=x=>x*Math.PI/180; const dla=toR(la2-la1),dlo=toR(lo2-lo1); const a=Math.sin(dla/2)**2+Math.cos(toR(la1))*Math.cos(toR(la2))*Math.sin(dlo/2)**2; return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)); }
 function acharMaisProxima(){
   const fb=document.getElementById("geoMsg"); if(!fb) return;
@@ -348,12 +344,16 @@ function renderClient(){
     h+=`<div class="herologo"><img src="logo.png" alt="SeuBarba" onerror="this.parentNode.style.display='none'"></div><div class="eyebrow">Barbearia</div><h1>Onde você quer cortar?</h1>`;
     h+=`<button class="btn" data-a="geo" style="margin:0 0 8px;display:flex;align-items:center;justify-content:center;gap:8px">${pin} A mais próxima de você</button>`;
     h+=`<div class="hint" id="geoMsg" style="margin-top:0;text-align:center"></div>`;
+    if(barbershops.length===0){
+      h+=`<div class="lr" style="justify-content:center;color:var(--mut);text-align:center">Nenhuma barbearia cadastrada ainda.<br>Em breve, novas unidades por aqui.</div>`;
+    } else {
     h+=`<div class="eyebrow" style="margin:18px 0 10px">Ou escolha</div>`;
     barbershops.forEach(s=>{
       const d = s._dist? ` · ${s._dist.toFixed(1)} km`:"";
       const slot = s.slots? "horários disponíveis":"sem horários hoje";
       h+=`<div class="tile ${s.slots?'':'off'}" data-a="shop:${s.id}"><div class="ic">${ICONS.shop}</div><div style="flex:1"><div class="nm">${s.nome}</div><div class="sb">${s.bairro}${d} · ${slot}</div></div><div class="ar">&rsaquo;</div></div>`;
     });
+    }
     main.innerHTML=h; return;
   }
   if(S.step===1){
@@ -837,7 +837,7 @@ async function hydrate(){
       sb.from('barber_shops').select('*'),
     ]);
     const links = rLinks.data || [];
-    if(rShops.data && rShops.data.length){
+    if(rShops.data){
       barbershops = rShops.data.map(s=>({ id:s.id, nome:s.nome, bairro:s.bairro||'', lat:s.lat, lng:s.lng,
         barbers: links.filter(l=>l.shop_id===s.id).map(l=>l.barber_id), slots:true }));
     }
