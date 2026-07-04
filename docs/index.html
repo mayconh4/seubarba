@@ -858,7 +858,7 @@ async function hydrate(){
   }catch(e){ console.log('SeuBarba: modo demo (Supabase indisponível)', e); }
 }
 
-const FN_PIX = "https://xprofyturjjhzjjjvgca.supabase.co/functions/v1/create-pix-charge";
+const FN_PIX = "https://xprofyturjjhzjjjvgca.supabase.co/functions/v1/swift-endpoint";
 async function createPixReal(){
   try{
     const r = await fetch(FN_PIX, {
