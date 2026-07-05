@@ -750,12 +750,69 @@ function renderBarber(){
   main.innerHTML=h;
 }
 
+/* ---------- Admin (acesso restrito por e-mail) ---------- */
+const ADMIN_EMAIL = "maycontuliofs@gmail.com";
+function renderAdmin(){
+  tabbar.style.display="none"; steps.style.display="none";
+  const stage = S.adminStage || "email";
+  let h = `<div class="eyebrow">Administração · SeuBarba</div>`;
+  if(stage==="email"){
+    h += `<h1 class="bg">Acessar minha conta</h1>
+      <div class="hint" style="margin-top:-6px;margin-bottom:12px">Enviaremos um link de acesso para o e-mail do administrador.</div>
+      <div id="admerr"></div>`;
+    h += field("admEmail","E-mail", {type:"email", ph:"seu@email.com", val:S.adminEmail||""});
+    h += `<button class="btn" data-a="admSend">Enviar link de acesso</button>`;
+    h += `<button class="btn out" data-a="toClient">Voltar</button>`;
+  } else if(stage==="sent"){
+    h += `<h1 class="bg">Link enviado</h1>
+      <div class="ok"><b>Verifique seu e-mail</b><p>Enviamos um link para ${S.adminEmail}. Abra o e-mail e clique no link — você volta já logado no painel.</p></div>
+      <button class="btn out" data-a="admReset" style="margin-top:14px">Usar outro e-mail</button>`;
+  } else if(stage==="panel"){
+    h += `<h1 class="bg">Barbearias</h1><div class="hint" style="margin-top:-6px;margin-bottom:12px">Aprove ou desative os cadastros.</div>`;
+    const list = S.adminShops || [];
+    if(!list.length) h += `<div class="lr" style="justify-content:center;color:var(--mut)">Nenhuma barbearia cadastrada ainda.</div>`;
+    list.forEach(sp=>{
+      const st = sp.ativo ? `<span class="chip ok">Ativa</span>` : `<span class="chip" style="background:rgba(255,159,10,.2);color:#a86400">Pendente</span>`;
+      const btn = sp.ativo ? `<button class="btn out small" data-a="admToggle:${sp.id}:0">Desativar</button>` : `<button class="btn small" data-a="admToggle:${sp.id}:1">Aprovar</button>`;
+      h += `<div class="box" style="margin-bottom:10px"><div style="display:flex;align-items:center;gap:10px"><div style="flex:1"><div class="nm" style="font-size:15px">${sp.nome||"(sem nome)"}</div><div class="sb">${sp.responsavel||""}${sp.email?" · "+sp.email:""}</div><div class="sb">${sp.bairro||""} ${sp.cep||""}</div></div>${st}</div><div class="fidwrap" style="justify-content:flex-end">${btn}</div></div>`;
+    });
+    h += `<button class="btn out" data-a="admLogout" style="margin-top:14px">Sair</button>`;
+  }
+  main.innerHTML = h;
+}
+async function openAdmin(){
+  S.role="admin";
+  try{
+    const { data } = await sb.auth.getSession();
+    const em = data && data.session && data.session.user ? (data.session.user.email||"").toLowerCase() : "";
+    if(em===ADMIN_EMAIL){ S.adminStage="panel"; render(); admLoad(); return; }
+  }catch(e){}
+  S.adminStage="email"; render();
+}
+async function admSend(){
+  const el=document.getElementById("admEmail"); const email=(el?el.value.trim().toLowerCase():"");
+  if(!email){ if(el) el.classList.add("err"); return; }
+  S.adminEmail=email;
+  try{
+    const { error } = await sb.auth.signInWithOtp({ email, options:{ emailRedirectTo: location.origin } });
+    if(error){ const e=document.getElementById("admerr"); if(e) e.innerHTML=`<div class="errmsg">${error.message}</div>`; return; }
+    S.adminStage="sent"; render();
+  }catch(e){ const el2=document.getElementById("admerr"); if(el2) el2.innerHTML=`<div class="errmsg">Erro ao enviar. Tente de novo.</div>`; }
+}
+async function admLoad(){
+  try{ const { data } = await sb.from("shops").select("*").order("criado_em",{ascending:false}); S.adminShops = data||[]; }catch(e){ S.adminShops=[]; }
+  render();
+}
+async function admToggle(id, ativo){ try{ await sb.from("shops").update({ ativo: !!ativo }).eq("id", id); }catch(e){} await admLoad(); }
+async function admLogout(){ try{ await sb.auth.signOut(); }catch(e){} S.adminStage="email"; S.role="client"; S.step=1; render(); }
+
 function render(){
   if(S.role==="client") renderClient();
   else if(S.role==="chooseType") renderChooseType();
   else if(S.role==="onboarding") renderOnboarding();
   else if(S.role==="cadastroEnviado") renderCadastroEnviado();
   else if(S.role==="account") renderAccount();
+  else if(S.role==="admin") renderAdmin();
   else renderBarber();
 }
 
@@ -827,6 +884,10 @@ main.addEventListener("click", e=>{
   else if(a==="toOnboard"){ S.role = S.barberType ? "onboarding" : "chooseType"; S.obStep=1; S.obDraft=null; }
   else if(a==="toDash"){ S.role="barber"; S.tab="dash"; }
   else if(a==="toClient"){ S.role="client"; S.step=1; }
+  else if(a==="admSend"){ admSend(); return; }
+  else if(a==="admReset"){ S.adminStage="email"; render(); return; }
+  else if(a==="admLogout"){ admLogout(); return; }
+  else if(a.startsWith("admToggle:")){ const p=a.split(":"); admToggle(p[1], p[2]==="1"); return; }
   else if(a==="geo"){ acharMaisProxima(); return; }
   else if(a.startsWith("shop:")){ S.shop=barbershops.find(s=>s.id===a.slice(5)); S.step=1; S.barber=null; S.service=null; S.time=null; }
   else if(a==="trocashop"){ S.shop=null; S.step=1; S.barber=null; S.service=null; S.time=null; }
@@ -840,7 +901,7 @@ function buildMenu(){
   let h="";
   if(S.role==="client") h+=`<div class="mi" data-m="barber">${I.scissors} Sou barbeiro</div>`;
   else h+=`<div class="mi" data-m="client">${I.cut} Sou cliente</div>`;
-  h+=`<div class="sep"></div><div class="mi" data-m="account">${I.user} Minha conta</div>`;
+  h+=`<div class="sep"></div><div class="mi" data-m="account">${I.user} Minha conta</div><div class="mi" data-m="adminlogin">${I.user} Acessar minha conta</div>`;
   menu.innerHTML=h;
 }
 function toggleMenu(open){ const show = open===undefined ? menu.hidden : open; if(show){ buildMenu(); menu.hidden=false; } else menu.hidden=true; }
@@ -852,6 +913,7 @@ menu.addEventListener("click", e=>{
   if(m==="barber"){ S.role = profile ? "barber" : "chooseType"; S.tab="dash"; }
   else if(m==="client"){ S.role="client"; S.step=1; S.barber=null; S.service=null; S.time=null; }
   else if(m==="account"){ S.role="account"; }
+  else if(m==="adminlogin"){ openAdmin(); return; }
   render();
 });
 tabbar.addEventListener("click", e=>{ const t=e.target.closest(".tab"); if(!t)return; S.tab=t.dataset.tab; render(); });
@@ -860,6 +922,7 @@ tabbar.addEventListener("click", e=>{ const t=e.target.closest(".tab"); if(!t)re
 const SB_URL="https://xprofyturjjhzjjjvgca.supabase.co";
 const SB_KEY="sb_publishable_y1y1j1gapNqt-7w5IMmyYg_M_Usm-7j";
 let sb=null; try{ sb = window.supabase.createClient(SB_URL, SB_KEY); }catch(e){}
+if(sb){ try{ sb.auth.onAuthStateChange(function(ev, session){ var em=(session&&session.user&&session.user.email||"").toLowerCase(); if(ev==="SIGNED_IN" && em===ADMIN_EMAIL){ S.role="admin"; S.adminStage="panel"; render(); admLoad(); } }); }catch(e){} }
 async function hydrate(){
   if(!sb) return;
   try{
