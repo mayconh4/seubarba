@@ -885,7 +885,7 @@ main.addEventListener("click", e=>{
   else if(a.startsWith("type:")){ S.barberType=a.slice(5); S.role="onboarding"; S.obStep=1; S.obDraft=null; }
   else if(a==="toOnboard"){ S.role = S.barberType ? "onboarding" : "chooseType"; S.obStep=1; S.obDraft=null; }
   else if(a==="toDash"){ S.role="barber"; S.tab="dash"; }
-  else if(a==="toClient"){ S.role="client"; S.step=1; }
+  else if(a==="toClient"){ S.role="client"; S.step=1; S.shop=null; hydrate(); }
   else if(a==="accLogin"){ S.accStage="login"; render(); return; }
   else if(a==="accSignup"){ S.accStage="signup"; render(); return; }
   else if(a==="accHome"){ S.accStage="home"; render(); return; }
@@ -919,7 +919,7 @@ menu.addEventListener("click", e=>{
   const t=e.target.closest("[data-m]"); if(!t) return;
   const m=t.dataset.m; toggleMenu(false);
   if(m==="barber"){ if(!S.authEmail){ S.role="account"; S.accStage="signup"; } else { S.role="chooseType"; S.barberType=null; S.obStep=1; S.obDraft=null; } }
-  else if(m==="client"){ S.role="client"; S.step=1; S.barber=null; S.service=null; S.time=null; }
+  else if(m==="client"){ S.role="client"; S.step=1; S.barber=null; S.service=null; S.time=null; S.shop=null; hydrate(); }
   else if(m==="account"){ S.role="account"; S.accStage="home"; }
   render();
 });
