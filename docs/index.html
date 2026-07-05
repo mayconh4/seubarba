@@ -522,11 +522,17 @@ function obValidStep(){
 async function saveOnboarding(){
   const d = S.obDraft || {};
   d.tipo = S.barberType||"dono";
-  let ok = false;
+  let ok = false, uid = null;
+  try{ const { data } = await sb.auth.getSession(); uid = data && data.session && data.session.user ? data.session.user.id : null; }catch(e){}
+  if(!uid){
+    S.role="account"; S.accStage="signup"; render();
+    setTimeout(function(){ const el=document.getElementById("accerr"); if(el) el.innerHTML='<div class="errmsg">Crie sua conta (ou entre) para cadastrar sua barbearia.</div>'; }, 60);
+    return;
+  }
   if(sb){
     try{
       const { error } = await sb.from("shops").insert({
-        nome: d.nomeFantasia, bairro: d.province || "", ativo: false,
+        owner_id: uid, nome: d.nomeFantasia, bairro: d.province || "", ativo: false,
         cpf_cnpj: d.cpfCnpj, tipo_empresa: d.companyType, faturamento: Number(d.incomeValue)||null,
         responsavel: d.respNome, email: d.email, telefone: d.mobilePhone, nascimento: d.birthDate||null,
         cep: d.postalCode, logradouro: d.address, numero: d.addressNumber
@@ -912,7 +918,7 @@ document.addEventListener("click", ()=> toggleMenu(false));
 menu.addEventListener("click", e=>{
   const t=e.target.closest("[data-m]"); if(!t) return;
   const m=t.dataset.m; toggleMenu(false);
-  if(m==="barber"){ S.role = profile ? "barber" : "chooseType"; S.tab="dash"; }
+  if(m==="barber"){ if(!S.authEmail){ S.role="account"; S.accStage="signup"; } else { S.role="chooseType"; S.barberType=null; S.obStep=1; S.obDraft=null; } }
   else if(m==="client"){ S.role="client"; S.step=1; S.barber=null; S.service=null; S.time=null; }
   else if(m==="account"){ S.role="account"; S.accStage="home"; }
   render();
