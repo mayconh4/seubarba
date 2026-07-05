@@ -823,19 +823,43 @@ function renderAdmin(){
     main.innerHTML=`<div class="eyebrow">Administração</div><h1 class="bg">Acesso restrito</h1><div class="hint">Entre com o e-mail de administrador em "Minha conta".</div><button class="btn out" data-a="account">Ir para Minha conta</button>`;
     return;
   }
+  if(S.adminSvcShop){ renderAdminSvc(); return; }
   let h = `<div class="eyebrow">Administração · SeuBarba</div><h1 class="bg">Barbearias</h1><div class="hint" style="margin-top:-6px;margin-bottom:12px">Aprove ou desative os cadastros.</div>`;
   const list = S.adminShops || [];
   if(!list.length) h += `<div class="lr" style="justify-content:center;color:var(--mut)">Nenhuma barbearia cadastrada ainda.</div>`;
   list.forEach(sp=>{
     const st = sp.ativo ? `<span class="chip ok">Ativa</span>` : `<span class="chip" style="background:rgba(255,159,10,.2);color:#a86400">Pendente</span>`;
     const btn = sp.ativo ? `<button class="btn out small" data-a="admToggle:${sp.id}:0">Desativar</button>` : `<button class="btn small" data-a="admToggle:${sp.id}:1">Aprovar</button>`;
-    h += `<div class="box" style="margin-bottom:10px"><div style="display:flex;align-items:center;gap:10px"><div style="flex:1"><div class="nm" style="font-size:15px">${sp.nome||"(sem nome)"}</div><div class="sb">${sp.responsavel||""}${sp.email?" · "+sp.email:""}</div><div class="sb">${sp.bairro||""} ${sp.cep||""}</div></div>${st}</div><div class="fidwrap" style="justify-content:flex-end">${btn}</div></div>`;
+    h += `<div class="box" style="margin-bottom:10px"><div style="display:flex;align-items:center;gap:10px"><div style="flex:1"><div class="nm" style="font-size:15px">${sp.nome||"(sem nome)"}</div><div class="sb">${sp.responsavel||""}${sp.email?" · "+sp.email:""}</div><div class="sb">${sp.bairro||""} ${sp.cep||""}</div></div>${st}</div><div class="fidwrap" style="justify-content:flex-end;gap:8px"><button class="btn out small" data-a="admSvc:${sp.id}">Serviços</button>${btn}</div></div>`;
   });
   h += `<button class="btn out" data-a="account" style="margin-top:14px">Voltar</button>`;
   main.innerHTML = h;
 }
 async function admLoad(){ try{ const { data } = await sb.from("shops").select("*").order("criado_em",{ascending:false}); S.adminShops=data||[]; }catch(e){ S.adminShops=[]; } render(); }
 async function admToggle(id, ativo){ try{ await sb.from("shops").update({ ativo: !!ativo }).eq("id", id); }catch(e){} await admLoad(); }
+function renderAdminSvc(){
+  const sh = S.adminSvcShop; const cur = S.adminSvcList || [];
+  let h = `<div class="eyebrow">Serviços · ${sh.nome}</div><h1 class="bg">Serviços da barbearia</h1><div class="hint" style="margin-top:-6px;margin-bottom:12px">Adicione ou remova os serviços oferecidos.</div>`;
+  CATALOGO.forEach(function(c){
+    const has = cur.find(function(x){ return x.nome===c.nome; });
+    const preco = has ? has.preco : c.preco;
+    const btn = has ? `<button class="btn out small" data-a="admSvcDel:${has.id}">Remover</button>` : `<button class="btn small" data-a="admSvcAdd:${c.key}">Adicionar</button>`;
+    h += `<div class="box" style="margin-bottom:10px;${has?"border-color:var(--gold)":""}"><div style="display:flex;align-items:center;gap:10px"><div style="flex:1"><div class="nm" style="font-size:15px">${c.nome}</div><div class="sb">${c.dur} min · R$ ${Number(preco).toFixed(2).replace(".",",")}</div></div>${btn}</div></div>`;
+  });
+  h += `<button class="btn out" data-a="admSvcBack" style="margin-top:12px">Voltar</button>`;
+  main.innerHTML = h;
+}
+async function admSvcOpen(shopId){
+  S.adminSvcShop = (S.adminShops||[]).find(function(x){ return x.id===shopId; }) || {id:shopId, nome:""};
+  try{ const { data } = await sb.from("services").select("*").eq("shop_id", shopId); S.adminSvcList = data||[]; }catch(e){ S.adminSvcList=[]; }
+  render();
+}
+async function admSvcAdd(key){
+  const c = CATALOGO.find(function(x){ return x.key===key; }); if(!c || !S.adminSvcShop) return;
+  try{ await sb.from("services").insert({ shop_id: S.adminSvcShop.id, nome:c.nome, preco:c.preco, duracao_min:c.dur, categoria:c.cat }); }catch(e){}
+  await admSvcOpen(S.adminSvcShop.id);
+}
+async function admSvcDel(id){ try{ await sb.from("services").delete().eq("id", id); }catch(e){} await admSvcOpen(S.adminSvcShop.id); }
 
 function render(){
   if(S.role==="client") renderClient();
@@ -926,6 +950,10 @@ main.addEventListener("click", e=>{
   else if(a==="toCreate"){ S.role="chooseType"; S.barberType=null; S.obStep=1; S.obDraft=null; render(); return; }
   else if(a==="toAdmin"){ S.role="admin"; render(); admLoad(); return; }
   else if(a.startsWith("admToggle:")){ const p=a.split(":"); admToggle(p[1], p[2]==="1"); return; }
+  else if(a.startsWith("admSvc:")){ admSvcOpen(a.slice(7)); return; }
+  else if(a.startsWith("admSvcAdd:")){ admSvcAdd(a.slice(10)); return; }
+  else if(a.startsWith("admSvcDel:")){ admSvcDel(a.slice(10)); return; }
+  else if(a==="admSvcBack"){ S.adminSvcShop=null; render(); return; }
   else if(a==="geo"){ acharMaisProxima(); return; }
   else if(a.startsWith("shop:")){ S.shop=barbershops.find(s=>s.id===a.slice(5)); S.step=1; S.barber=null; S.service=null; S.time=null; }
   else if(a==="trocashop"){ S.shop=null; S.step=1; S.barber=null; S.service=null; S.time=null; }
