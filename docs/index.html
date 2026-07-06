@@ -204,11 +204,11 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-const barbers = [
+let barbers = [
   { id:"b1", nome:"João Silva", esp:["Fade","Barba","Social"], pct:.4 },
   { id:"b2", nome:"Pedro Santos", esp:["Degradê","Navalhado","Pigmentação"], pct:.4 },
 ];
-const services = [
+let services = [
   { id:"s1", nome:"Corte Masculino", preco:45, dur:30 },
   { id:"s2", nome:"Corte + Barba", preco:60, dur:45 },
   { id:"s3", nome:"Barba", preco:30, dur:30 },
@@ -347,9 +347,11 @@ function renderClient(){
     h+=`<button class="btn" data-a="geo" style="margin:0 0 8px;display:flex;align-items:center;justify-content:center;gap:8px">${pin} A mais próxima de você</button>`;
     h+=`<div class="hint" id="geoMsg" style="margin-top:0;text-align:center"></div>`;
     if(barbershops.length===0){
-      let msg = (S.shopLoad==="loading") ? "Carregando barbearias..." : (S.shopLoad && S.shopLoad.indexOf("erro")===0) ? ("Erro ao carregar. "+S.shopLoad) : "Nenhuma barbearia disponível ainda.";
-      h+=`<div class="lr" style="justify-content:center;color:var(--mut);text-align:center">${msg}</div>`;
-      if(S.shopLoad!=="loading") h+=`<button class="btn out" data-a="reload">Atualizar</button>`;
+      // Enquanto carrega, um aviso discreto. Sem barbearias (vazio ou falha),
+      // não mostramos nada nem erro para o cliente — apenas o espaço vazio.
+      if(S.shopLoad==="loading"){
+        h+=`<div class="lr" style="justify-content:center;color:var(--mut);text-align:center">Carregando…</div>`;
+      }
     } else {
     h+=`<div class="eyebrow" style="margin:18px 0 10px">Ou escolha</div>`;
     barbershops.forEach(s=>{
