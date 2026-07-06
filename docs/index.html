@@ -346,7 +346,9 @@ function renderClient(){
     h+=`<button class="btn" data-a="geo" style="margin:0 0 8px;display:flex;align-items:center;justify-content:center;gap:8px">${pin} A mais próxima de você</button>`;
     h+=`<div class="hint" id="geoMsg" style="margin-top:0;text-align:center"></div>`;
     if(barbershops.length===0){
-      h+=`<div class="lr" style="justify-content:center;color:var(--mut);text-align:center">Nenhuma barbearia cadastrada ainda.<br>Em breve, novas unidades por aqui.</div>`;
+      let msg = (S.shopLoad==="loading") ? "Carregando barbearias..." : (S.shopLoad && S.shopLoad.indexOf("erro")===0) ? ("Erro ao carregar. "+S.shopLoad) : "Nenhuma barbearia disponível ainda.";
+      h+=`<div class="lr" style="justify-content:center;color:var(--mut);text-align:center">${msg}</div>`;
+      if(S.shopLoad!=="loading") h+=`<button class="btn out" data-a="reload">Atualizar</button>`;
     } else {
     h+=`<div class="eyebrow" style="margin:18px 0 10px">Ou escolha</div>`;
     barbershops.forEach(s=>{
@@ -975,6 +977,7 @@ main.addEventListener("click", e=>{
   else if(a.startsWith("admSvcDel:")){ admSvcDel(a.slice(10)); return; }
   else if(a==="admSvcBack"){ S.adminSvcShop=null; render(); return; }
   else if(a==="geo"){ acharMaisProxima(); return; }
+  else if(a==="reload"){ hydrate(); return; }
   else if(a.startsWith("shop:")){ S.shop=barbershops.find(s=>s.id===a.slice(5)); S.step=1; S.barber=null; S.service=null; S.time=null; }
   else if(a==="trocashop"){ S.shop=null; S.step=1; S.barber=null; S.service=null; S.time=null; }
   render();
@@ -1009,7 +1012,8 @@ const SB_KEY="sb_publishable_y1y1j1gapNqt-7w5IMmyYg_M_Usm-7j";
 let sb=null; try{ sb = window.supabase.createClient(SB_URL, SB_KEY); }catch(e){}
 if(sb){ try{ refreshAuth(); sb.auth.onAuthStateChange(function(ev, session){ S.authEmail=(session&&session.user&&session.user.email)||""; if(ev==="SIGNED_IN"){ S.role="account"; S.accStage="home"; render(); } }); }catch(e){} }
 async function hydrate(){
-  if(!sb) return;
+  if(!sb){ S.shopLoad="erro: sem conexao"; return; }
+  S.shopLoad="loading"; render();
   try{
     const [rShops,rSvcs,rBarbers,rLinks] = await Promise.all([
       sb.from('shops').select('*').eq('ativo', true),
@@ -1018,6 +1022,8 @@ async function hydrate(){
       sb.from('barber_shops').select('*'),
     ]);
     const links = rLinks.data || [];
+    if(rShops.error){ S.shopLoad="erro: "+(rShops.error.message||JSON.stringify(rShops.error)); }
+    else { S.shopLoad = (rShops.data && rShops.data.length) ? "ok" : "vazio"; }
     if(rShops.data){
       barbershops = rShops.data.map(s=>({ id:s.id, nome:s.nome, bairro:s.bairro||'', lat:s.lat, lng:s.lng,
         barbers: links.filter(l=>l.shop_id===s.id).map(l=>l.barber_id), slots:true, abre:s.abre, fecha:s.fecha, almocoIni:s.almoco_ini, almocoFim:s.almoco_fim, dias:s.dias }));
