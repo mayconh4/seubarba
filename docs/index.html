@@ -1012,15 +1012,16 @@ const SB_KEY="sb_publishable_y1y1j1gapNqt-7w5IMmyYg_M_Usm-7j";
 let sb=null; try{ sb = window.supabase.createClient(SB_URL, SB_KEY); }catch(e){}
 if(sb){ try{ refreshAuth(); sb.auth.onAuthStateChange(function(ev, session){ S.authEmail=(session&&session.user&&session.user.email)||""; if(ev==="SIGNED_IN"){ S.role="account"; S.accStage="home"; render(); } }); }catch(e){} }
 async function hydrate(){
-  if(!sb){ S.shopLoad="erro: sem conexao"; return; }
+  if(!sb){ S.shopLoad="erro: sem conexao"; render(); return; }
   S.shopLoad="loading"; render();
   try{
-    const [rShops,rSvcs,rBarbers,rLinks] = await Promise.all([
+    const timeout = new Promise((_,rej)=>setTimeout(()=>rej(new Error("tempo esgotado, verifique sua conexao")), 12000));
+    const [rShops,rSvcs,rBarbers,rLinks] = await Promise.race([Promise.all([
       sb.from('shops').select('*').eq('ativo', true),
       sb.from('services').select('*'),
       sb.from('barbers').select('*'),
       sb.from('barber_shops').select('*'),
-    ]);
+    ]), timeout]);
     const links = rLinks.data || [];
     if(rShops.error){ S.shopLoad="erro: "+(rShops.error.message||JSON.stringify(rShops.error)); }
     else { S.shopLoad = (rShops.data && rShops.data.length) ? "ok" : "vazio"; }
@@ -1034,9 +1035,12 @@ async function hydrate(){
     if(rSvcs.data && rSvcs.data.length){
       services = rSvcs.data.map(s=>({ id:s.id, nome:s.nome, preco:Number(s.preco), dur:s.duracao_min, shop_id:s.shop_id, cat:s.categoria }));
     }
-    render();
     console.log('SeuBarba: dados carregados do Supabase');
-  }catch(e){ console.log('SeuBarba: modo demo (Supabase indisponível)', e); }
+  }catch(e){
+    S.shopLoad = "erro: " + ((e && e.message) ? e.message : e);
+    console.log('SeuBarba: falha ao carregar dados do Supabase', e);
+  }
+  render();
 }
 
 const FN_PIX = "https://xprofyturjjhzjjjvgca.supabase.co/functions/v1/swift-endpoint";
