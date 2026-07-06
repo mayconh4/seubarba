@@ -594,6 +594,7 @@ async function saveOnboarding(){
   profile = d;
   S.obStep=1; S.obDraft=null;
   S.cadastroOk = ok;
+  S.myShops = undefined;
   S.role = "cadastroEnviado";
   render();
 }
@@ -637,8 +638,19 @@ function renderAccount(){
     if(em){
       h += `<h1 class="bg">Sua conta</h1><div class="lr"><span class="c">Logado como</span><b>${em}</b></div>`;
       if(em.toLowerCase()===ADMIN_EMAIL) h += `<button class="btn" data-a="toAdmin">Painel do administrador</button>`;
-      h += `<button class="btn out" data-a="toCreate" style="margin-top:10px">Cadastrar / editar barbearia</button>`;
+      h += `<button class="btn out" data-a="toCreate" style="margin-top:10px">Cadastrar nova barbearia</button>`;
       h += `<button class="btn out" data-a="accLogout" style="margin-top:10px">Sair</button>`;
+      h += `<div class="sllbl" style="margin:20px 0 8px">Minhas barbearias</div>`;
+      if(S.myShops===undefined || S.myShops===null){
+        h += `<div class="lr" style="justify-content:center;color:var(--mut)">Carregando…</div>`;
+        loadMyShops();
+      } else if(!S.myShops.length){
+        h += `<div class="lr" style="justify-content:center;color:var(--mut)">Você ainda não tem barbearia cadastrada.</div>`;
+      } else S.myShops.forEach(function(sp){
+        const st = sp.ativo ? `<span class="chip ok">Ativa</span>` : `<span class="chip" style="background:rgba(255,159,10,.2);color:#a86400">Pendente</span>`;
+        h += `<div class="box" style="margin-bottom:10px"><div style="display:flex;align-items:center;gap:10px"><div style="flex:1"><div class="nm" style="font-size:15px">${sp.nome||"(sem nome)"}</div><div class="sb">${sp.bairro||""}</div></div>${st}</div>
+          <div class="fidwrap" style="justify-content:flex-end;gap:8px"><button class="btn small" data-a="svcOpen:${sp.id}:account">Serviços e preços</button></div></div>`;
+      });
     } else {
       h += `<h1 class="bg">Sua conta</h1><div class="hint" style="margin-top:-6px;margin-bottom:14px">Acesse sua conta ou crie uma nova.</div>`;
       h += `<button class="btn" data-a="accLogin">Acessar conta</button>`;
@@ -844,45 +856,220 @@ function renderAdmin(){
     main.innerHTML=`<div class="eyebrow">Administração</div><h1 class="bg">Acesso restrito</h1><div class="hint">Entre com o e-mail de administrador em "Minha conta".</div><button class="btn out" data-a="account">Ir para Minha conta</button>`;
     return;
   }
-  if(S.adminSvcShop){ renderAdminSvc(); return; }
-  let h = `<div class="eyebrow">Administração · SeuBarba</div><h1 class="bg">Barbearias</h1><div class="hint" style="margin-top:-6px;margin-bottom:12px">Aprove ou desative os cadastros.</div>`;
+  let h = `<div class="eyebrow">Administração · SeuBarba</div><h1 class="bg">Barbearias</h1><div class="hint" style="margin-top:-6px;margin-bottom:12px">Aprove, edite ou exclua os cadastros.</div>`;
   const list = S.adminShops || [];
   if(!list.length) h += `<div class="lr" style="justify-content:center;color:var(--mut)">Nenhuma barbearia cadastrada ainda.</div>`;
   list.forEach(sp=>{
     const st = sp.ativo ? `<span class="chip ok">Ativa</span>` : `<span class="chip" style="background:rgba(255,159,10,.2);color:#a86400">Pendente</span>`;
     const btn = sp.ativo ? `<button class="btn out small" data-a="admToggle:${sp.id}:0">Desativar</button>` : `<button class="btn small" data-a="admToggle:${sp.id}:1">Aprovar</button>`;
-    h += `<div class="box" style="margin-bottom:10px"><div style="display:flex;align-items:center;gap:10px"><div style="flex:1"><div class="nm" style="font-size:15px">${sp.nome||"(sem nome)"}</div><div class="sb">${sp.responsavel||""}${sp.email?" · "+sp.email:""}</div><div class="sb">${sp.bairro||""} ${sp.cep||""}</div></div>${st}</div><div class="fidwrap" style="justify-content:flex-end;gap:8px"><button class="btn out small" data-a="admSvc:${sp.id}">Serviços</button>${btn}</div></div>`;
+    h += `<div class="box" style="margin-bottom:10px"><div style="display:flex;align-items:center;gap:10px"><div style="flex:1"><div class="nm" style="font-size:15px">${sp.nome||"(sem nome)"}</div><div class="sb">${sp.responsavel||""}${sp.email?" · "+sp.email:""}</div><div class="sb">${sp.bairro||""} ${sp.cep||""}</div></div>${st}</div>
+      <div class="fidwrap" style="justify-content:flex-end;gap:8px;flex-wrap:wrap"><button class="btn out small" data-a="svcOpen:${sp.id}:admin">Serviços</button><button class="btn out small" data-a="admBarb:${sp.id}">Barbeiros</button><button class="btn out small" data-a="admEdit:${sp.id}">Editar</button>${btn}<button class="btn out small" data-a="admDel:${sp.id}" style="color:var(--cancel);border-color:rgba(255,59,48,.35)">Excluir</button></div></div>`;
   });
   h += `<button class="btn out" data-a="account" style="margin-top:14px">Voltar</button>`;
   main.innerHTML = h;
 }
 async function admLoad(){ try{ const { data } = await sb.from("shops").select("*").order("criado_em",{ascending:false}); S.adminShops=data||[]; }catch(e){ S.adminShops=[]; } render(); }
 async function admToggle(id, ativo){ try{ await sb.from("shops").update({ ativo: !!ativo }).eq("id", id); }catch(e){} await admLoad(); }
-function renderAdminSvc(){
-  const sh = S.adminSvcShop; const cur = S.adminSvcList || [];
-  let h = `<div class="eyebrow">Serviços · ${sh.nome}</div><h1 class="bg">Serviços da barbearia</h1><div class="hint" style="margin-top:-6px;margin-bottom:12px">Adicione ou remova os serviços oferecidos.</div>`;
+async function admDelShop(id){
+  const sp = (S.adminShops||[]).find(function(x){ return x.id===id; });
+  if(!window.confirm('Excluir definitivamente "'+((sp&&sp.nome)||'esta barbearia')+'"?\nOs serviços e a equipe vinculada também serão removidos.')) return;
+  let err=null;
+  try{
+    await sb.from("services").delete().eq("shop_id", id);
+    await sb.from("barber_shops").delete().eq("shop_id", id);
+    const r = await sb.from("shops").delete().eq("id", id);
+    err = r.error;
+  }catch(e){ err=e; }
+  if(err) window.alert("Não foi possível excluir: "+(err.message||err));
+  await admLoad();
+}
+
+/* ---------- Serviços e preços (admin e dono da barbearia) ---------- */
+function renderSvcEditor(){
+  tabbar.style.display="none"; steps.style.display="none";
+  const sh = S.svcShop; const cur = S.svcList || [];
+  let h = `<div class="eyebrow">Serviços · ${sh.nome||""}</div><h1 class="bg">Serviços e preços</h1><div class="hint" style="margin-top:-6px;margin-bottom:12px">Adicione, remova ou altere o preço dos serviços oferecidos.</div><div id="svcerr"></div>`;
   CATALOGO.forEach(function(c){
     const has = cur.find(function(x){ return x.nome===c.nome; });
-    const preco = has ? has.preco : c.preco;
-    const btn = has ? `<button class="btn out small" data-a="admSvcDel:${has.id}">Remover</button>` : `<button class="btn small" data-a="admSvcAdd:${c.key}">Adicionar</button>`;
-    h += `<div class="box" style="margin-bottom:10px;${has?"border-color:var(--gold)":""}"><div style="display:flex;align-items:center;gap:10px"><div style="flex:1"><div class="nm" style="font-size:15px">${c.nome}</div><div class="sb">${c.dur} min · R$ ${Number(preco).toFixed(2).replace(".",",")}</div></div>${btn}</div></div>`;
+    if(has){
+      h += `<div class="box" style="margin-bottom:10px;border-color:var(--gold)"><div style="display:flex;align-items:center;gap:10px"><div style="flex:1"><div class="nm" style="font-size:15px">${c.nome}</div><div class="sb">${has.duracao_min||c.dur} min</div></div><button class="btn out small" data-a="svcDel:${has.id}">Remover</button></div>
+        <div class="slrow" style="margin-top:10px;align-items:center"><span class="sllbl">Preço</span><span class="slval">R$ <input type="number" id="svcprice_${has.id}" value="${Number(has.preco)}" min="0" step="0.5" style="width:80px;text-align:right"></span><button class="btn small" data-a="svcSave:${has.id}" style="margin-left:8px">Salvar preço</button></div></div>`;
+    } else {
+      h += `<div class="box" style="margin-bottom:10px"><div style="display:flex;align-items:center;gap:10px"><div style="flex:1"><div class="nm" style="font-size:15px">${c.nome}</div><div class="sb">${c.dur} min · sugestão R$ ${Number(c.preco).toFixed(2).replace(".",",")}</div></div><button class="btn small" data-a="svcAdd:${c.key}">Adicionar</button></div></div>`;
+    }
   });
-  h += `<button class="btn out" data-a="admSvcBack" style="margin-top:12px">Voltar</button>`;
+  h += `<button class="btn out" data-a="svcBack" style="margin-top:12px">Voltar</button>`;
   main.innerHTML = h;
 }
-async function admSvcOpen(shopId){
-  S.adminSvcShop = (S.adminShops||[]).find(function(x){ return x.id===shopId; }) || {id:shopId, nome:""};
-  try{ const { data } = await sb.from("services").select("*").eq("shop_id", shopId); S.adminSvcList = data||[]; }catch(e){ S.adminSvcList=[]; }
+function svcErr(msg){ const el=document.getElementById("svcerr"); if(el) el.innerHTML=`<div class="errmsg">${msg}</div>`; }
+async function svcOpen(shopId, back){
+  if(back) S.svcBack = back;
+  let sh = (S.adminShops||[]).concat(S.myShops||[]).find(function(x){ return x.id===shopId; }) || S.svcShop;
+  if(!sh || sh.id!==shopId){ try{ const { data } = await sb.from("shops").select("*").eq("id", shopId).single(); sh = data; }catch(e){} }
+  if(!sh) return;
+  S.svcShop = sh;
+  try{ const { data } = await sb.from("services").select("*").eq("shop_id", shopId); S.svcList = data||[]; }catch(e){ S.svcList=[]; }
   render();
 }
-async function admSvcAdd(key){
-  const c = CATALOGO.find(function(x){ return x.key===key; }); if(!c || !S.adminSvcShop) return;
-  try{ await sb.from("services").insert({ shop_id: S.adminSvcShop.id, nome:c.nome, preco:c.preco, duracao_min:c.dur, categoria:c.cat }); }catch(e){}
-  await admSvcOpen(S.adminSvcShop.id);
+async function svcAdd(key){
+  const c = CATALOGO.find(function(x){ return x.key===key; }); if(!c || !S.svcShop) return;
+  let err=null;
+  try{ const r = await sb.from("services").insert({ shop_id: S.svcShop.id, nome:c.nome, preco:c.preco, duracao_min:c.dur, categoria:c.cat }); err=r.error; }catch(e){ err=e; }
+  await svcOpen(S.svcShop.id);
+  if(err) svcErr("Não foi possível adicionar: "+(err.message||err));
 }
-async function admSvcDel(id){ try{ await sb.from("services").delete().eq("id", id); }catch(e){} await admSvcOpen(S.adminSvcShop.id); }
+async function svcDel(id){
+  let err=null;
+  try{ const r = await sb.from("services").delete().eq("id", id); err=r.error; }catch(e){ err=e; }
+  await svcOpen(S.svcShop.id);
+  if(err) svcErr("Não foi possível remover: "+(err.message||err));
+}
+async function svcSave(id){
+  const el = document.getElementById("svcprice_"+id); if(!el) return;
+  const preco = Number(el.value);
+  if(!(preco>0)){ el.classList.add("err"); el.focus(); return; }
+  let err=null;
+  try{ const r = await sb.from("services").update({ preco: preco }).eq("id", id); err=r.error; }catch(e){ err=e; }
+  await svcOpen(S.svcShop.id);
+  if(err) svcErr("Não foi possível salvar o preço: "+(err.message||err));
+}
+function svcExit(){
+  const back = S.svcBack || "admin";
+  S.svcShop=null; S.svcList=null; S.svcBack=null;
+  S.role = (back==="account") ? "account" : "admin";
+  if(back==="account") S.accStage="home";
+  render();
+}
+
+/* ---------- Minhas barbearias (dono) ---------- */
+async function loadMyShops(){
+  if(S.myShopsLoading) return; S.myShopsLoading=true;
+  let uid=null;
+  try{ const { data } = await sb.auth.getSession(); uid = data&&data.session&&data.session.user ? data.session.user.id : null; }catch(e){}
+  if(!uid){ S.myShops=[]; S.myShopsLoading=false; if(S.role==="account") render(); return; }
+  try{ const { data } = await sb.from("shops").select("*").eq("owner_id", uid).order("criado_em",{ascending:false}); S.myShops=data||[]; }catch(e){ S.myShops=[]; }
+  S.myShopsLoading=false;
+  if(S.role==="account") render();
+}
+
+/* ---------- Barbeiros da barbearia (admin) ---------- */
+function renderAdminBarbers(){
+  tabbar.style.display="none"; steps.style.display="none";
+  const sh = S.barbShop; const links = S.barbLinks||[]; const all = S.allBarbers||[];
+  const inShop = links.map(function(l){ return all.find(function(b){ return b.id===l.barber_id; }) || {id:l.barber_id, nome:"(barbeiro)"}; });
+  const out = all.filter(function(b){ return !links.some(function(l){ return l.barber_id===b.id; }); });
+  let h = `<div class="eyebrow">Barbeiros · ${sh.nome||""}</div><h1 class="bg">Equipe da barbearia</h1><div class="hint" style="margin-top:-6px;margin-bottom:12px">Inclua ou retire barbeiros desta barbearia.</div><div id="barberr"></div>`;
+  h += `<div class="sllbl" style="margin:4px 0 8px">Na equipe</div>`;
+  if(!inShop.length) h += `<div class="lr" style="justify-content:center;color:var(--mut)">Nenhum barbeiro nesta barbearia ainda.</div>`;
+  inShop.forEach(function(b){
+    h += `<div class="box" style="margin-bottom:10px;border-color:var(--gold)"><div style="display:flex;align-items:center;gap:10px"><div style="flex:1"><div class="nm" style="font-size:15px">${b.nome}</div><div class="sb">${(b.especialidades||[]).join(" · ")}</div></div><button class="btn out small" data-a="admBarbDel:${b.id}">Retirar</button></div></div>`;
+  });
+  if(out.length){
+    h += `<div class="sllbl" style="margin:16px 0 8px">Outros barbeiros cadastrados</div>`;
+    out.forEach(function(b){
+      h += `<div class="box" style="margin-bottom:10px"><div style="display:flex;align-items:center;gap:10px"><div style="flex:1"><div class="nm" style="font-size:15px">${b.nome}</div><div class="sb">${(b.especialidades||[]).join(" · ")}</div></div><button class="btn small" data-a="admBarbAdd:${b.id}">Incluir</button></div></div>`;
+    });
+  }
+  h += `<div class="sllbl" style="margin:16px 0 8px">Novo barbeiro</div>`;
+  h += field("nbNome","Nome do barbeiro",{req:false,ph:"Ex.: Carlos Silva",val:S.nbNome||""});
+  h += field("nbEsp","Especialidades (opcional, separe por vírgula)",{req:false,ph:"Ex.: Corte, Barba",val:S.nbEsp||""});
+  h += `<button class="btn" data-a="admBarbNew">Criar e incluir na equipe</button>`;
+  h += `<button class="btn out" data-a="admBarbBack" style="margin-top:10px">Voltar</button>`;
+  main.innerHTML = h;
+}
+function barbErr(msg){ const el=document.getElementById("barberr"); if(el) el.innerHTML=`<div class="errmsg">${msg}</div>`; }
+async function admBarbOpen(shopId){
+  const sh = (S.adminShops||[]).find(function(x){ return x.id===shopId; }) || S.barbShop; if(!sh) return;
+  S.barbShop = sh;
+  try{
+    const rB = await sb.from("barbers").select("*");
+    const rL = await sb.from("barber_shops").select("*").eq("shop_id", shopId);
+    S.allBarbers = rB.data||[]; S.barbLinks = rL.data||[];
+  }catch(e){ S.allBarbers=S.allBarbers||[]; S.barbLinks=S.barbLinks||[]; }
+  render();
+}
+async function admBarbAdd(barberId){
+  let err=null;
+  try{ const r = await sb.from("barber_shops").insert({ shop_id: S.barbShop.id, barber_id: barberId }); err=r.error; }catch(e){ err=e; }
+  await admBarbOpen(S.barbShop.id);
+  if(err) barbErr("Não foi possível incluir: "+(err.message||err));
+}
+async function admBarbDel(barberId){
+  let err=null;
+  try{ const r = await sb.from("barber_shops").delete().eq("shop_id", S.barbShop.id).eq("barber_id", barberId); err=r.error; }catch(e){ err=e; }
+  await admBarbOpen(S.barbShop.id);
+  if(err) barbErr("Não foi possível retirar: "+(err.message||err));
+}
+async function admBarbNew(){
+  const n=document.getElementById("nbNome"), e=document.getElementById("nbEsp");
+  S.nbNome = n?n.value.trim():""; S.nbEsp = e?e.value.trim():"";
+  if(!S.nbNome){ if(n){ n.classList.add("err"); n.focus(); } return; }
+  const esp = S.nbEsp ? S.nbEsp.split(",").map(function(x){ return x.trim(); }).filter(Boolean) : [];
+  let err=null;
+  try{
+    const r = await sb.from("barbers").insert({ nome:S.nbNome, especialidades:esp }).select("id").single();
+    if(r.error) err=r.error;
+    else { const r2 = await sb.from("barber_shops").insert({ shop_id:S.barbShop.id, barber_id:r.data.id }); err=r2.error; }
+  }catch(ex){ err=ex; }
+  if(!err){ S.nbNome=""; S.nbEsp=""; }
+  await admBarbOpen(S.barbShop.id);
+  if(err) barbErr("Não foi possível criar: "+(err.message||err));
+}
+
+/* ---------- Edição completa da barbearia (admin) ---------- */
+function horaSel(v){ return (v===null||v===undefined||v==="") ? "" : ((v<10?"0"+v:""+v)+":00"); }
+function renderAdminEdit(){
+  tabbar.style.display="none"; steps.style.display="none";
+  const sp = S.editShop;
+  let h = `<div class="eyebrow">Editar · ${sp.nome||"barbearia"}</div><h1 class="bg">Dados da barbearia</h1><div class="hint" style="margin-top:-6px;margin-bottom:12px">Altere o que precisar e salve.</div><div id="editerr"></div>`;
+  h += field("edNome","Nome da barbearia",{val:sp.nome||""});
+  h += field("edBairro","Bairro",{req:false,val:sp.bairro||""});
+  h += field("edResp","Responsável",{req:false,val:sp.responsavel||""});
+  h += `<div class="grid2">`+field("edEmail","E-mail",{req:false,type:"email",val:sp.email||""})+field("edTel","Celular (WhatsApp)",{req:false,val:sp.telefone||""})+`</div>`;
+  h += `<div class="grid2">`+field("edCep","CEP",{req:false,val:sp.cep||""})+field("edNum","Número",{req:false,val:sp.numero||""})+`</div>`;
+  h += field("edLog","Endereço",{req:false,val:sp.logradouro||""});
+  h += `<div class="sllbl" style="margin:6px 0 8px">Dias de atendimento</div><div class="slots" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">`;
+  const dias = sp.dias||[];
+  DIAS.forEach(function(d){ const on=dias.indexOf(d.k)>=0; h += `<div class="slot ${on?"sel":""}" data-a="admDia:${d.k}">${d.t}</div>`; });
+  h += `</div>`;
+  h += `<div class="grid2">`+field("edAbre","Abre",{opts:HORAS,val:horaSel(sp.abre)||"08:00"})+field("edFecha","Fecha",{opts:HORAS,val:horaSel(sp.fecha)||"19:00"})+`</div>`;
+  h += `<div class="grid2">`+field("edAlmIni","Almoço início",{req:false,opts:HORAS_OPC,val:horaSel(sp.almoco_ini)})+field("edAlmFim","Almoço fim",{req:false,opts:HORAS_OPC,val:horaSel(sp.almoco_fim)})+`</div>`;
+  h += `<button class="btn" data-a="admEditSave">Salvar alterações</button>`;
+  h += `<button class="btn out" data-a="admEditBack" style="margin-top:10px">Voltar</button>`;
+  main.innerHTML = h;
+}
+function admEditRead(){
+  const g=function(id){ const el=document.getElementById(id); return el?el.value:""; };
+  const sp=S.editShop; if(!sp) return;
+  sp.nome=g("edNome").trim(); sp.bairro=g("edBairro").trim(); sp.responsavel=g("edResp").trim();
+  sp.email=g("edEmail").trim(); sp.telefone=g("edTel").trim();
+  sp.cep=g("edCep").trim(); sp.numero=g("edNum").trim(); sp.logradouro=g("edLog").trim();
+  sp.abre=parseInt(g("edAbre"),10); sp.fecha=parseInt(g("edFecha"),10);
+  sp.almoco_ini = g("edAlmIni")==="" ? null : parseInt(g("edAlmIni"),10);
+  sp.almoco_fim = g("edAlmFim")==="" ? null : parseInt(g("edAlmFim"),10);
+}
+async function admEditSave(){
+  admEditRead();
+  const sp=S.editShop;
+  if(!sp.nome){ const el=document.getElementById("edNome"); if(el){ el.classList.add("err"); el.focus(); } return; }
+  let err=null;
+  try{
+    const r = await sb.from("shops").update({
+      nome:sp.nome, bairro:sp.bairro, responsavel:sp.responsavel, email:sp.email, telefone:sp.telefone,
+      cep:sp.cep, numero:sp.numero, logradouro:sp.logradouro,
+      abre:sp.abre, fecha:sp.fecha, almoco_ini:sp.almoco_ini, almoco_fim:sp.almoco_fim, dias:sp.dias||[]
+    }).eq("id", sp.id);
+    err=r.error;
+  }catch(e){ err=e; }
+  if(err){ const el=document.getElementById("editerr"); if(el) el.innerHTML=`<div class="errmsg">Não foi possível salvar: ${err.message||err}</div>`; return; }
+  S.editShop=null;
+  await admLoad();
+}
 
 function render(){
+  if(S.svcShop){ renderSvcEditor(); return; }
+  if(S.barbShop){ renderAdminBarbers(); return; }
+  if(S.editShop){ renderAdminEdit(); return; }
   if(S.role==="client") renderClient();
   else if(S.role==="chooseType") renderChooseType();
   else if(S.role==="onboarding") renderOnboarding();
@@ -972,10 +1159,21 @@ main.addEventListener("click", e=>{
   else if(a==="toCreate"){ S.role="chooseType"; S.barberType=null; S.obStep=1; S.obDraft=null; render(); return; }
   else if(a==="toAdmin"){ S.role="admin"; render(); admLoad(); return; }
   else if(a.startsWith("admToggle:")){ const p=a.split(":"); admToggle(p[1], p[2]==="1"); return; }
-  else if(a.startsWith("admSvc:")){ admSvcOpen(a.slice(7)); return; }
-  else if(a.startsWith("admSvcAdd:")){ admSvcAdd(a.slice(10)); return; }
-  else if(a.startsWith("admSvcDel:")){ admSvcDel(a.slice(10)); return; }
-  else if(a==="admSvcBack"){ S.adminSvcShop=null; render(); return; }
+  else if(a.startsWith("admDel:")){ admDelShop(a.slice(7)); return; }
+  else if(a.startsWith("svcOpen:")){ const p=a.split(":"); svcOpen(p[1], p[2]||"admin"); return; }
+  else if(a.startsWith("svcAdd:")){ svcAdd(a.slice(7)); return; }
+  else if(a.startsWith("svcSave:")){ svcSave(a.slice(8)); return; }
+  else if(a.startsWith("svcDel:")){ svcDel(a.slice(7)); return; }
+  else if(a==="svcBack"){ svcExit(); return; }
+  else if(a.startsWith("admBarbAdd:")){ admBarbAdd(a.slice(11)); return; }
+  else if(a.startsWith("admBarbDel:")){ admBarbDel(a.slice(11)); return; }
+  else if(a==="admBarbNew"){ admBarbNew(); return; }
+  else if(a==="admBarbBack"){ S.barbShop=null; S.barbLinks=null; S.role="admin"; render(); return; }
+  else if(a.startsWith("admBarb:")){ admBarbOpen(a.slice(8)); return; }
+  else if(a==="admEditSave"){ admEditSave(); return; }
+  else if(a==="admEditBack"){ S.editShop=null; render(); return; }
+  else if(a.startsWith("admEdit:")){ const sp=(S.adminShops||[]).find(function(x){ return x.id===a.slice(8); }); if(sp){ S.editShop=JSON.parse(JSON.stringify(sp)); render(); } return; }
+  else if(a.startsWith("admDia:")){ admEditRead(); const k=a.slice(7); const sp=S.editShop; if(sp){ if(!sp.dias) sp.dias=[]; const ix=sp.dias.indexOf(k); if(ix>=0) sp.dias.splice(ix,1); else sp.dias.push(k); render(); } return; }
   else if(a==="geo"){ acharMaisProxima(); return; }
   else if(a==="reload"){ hydrate(); return; }
   else if(a.startsWith("shop:")){ S.shop=barbershops.find(s=>s.id===a.slice(5)); S.step=1; S.barber=null; S.service=null; S.time=null; }
@@ -1010,7 +1208,7 @@ tabbar.addEventListener("click", e=>{ const t=e.target.closest(".tab"); if(!t)re
 const SB_URL="https://xprofyturjjhzjjjvgca.supabase.co";
 const SB_KEY="sb_publishable_y1y1j1gapNqt-7w5IMmyYg_M_Usm-7j";
 let sb=null; try{ sb = window.supabase.createClient(SB_URL, SB_KEY); }catch(e){}
-if(sb){ try{ refreshAuth(); sb.auth.onAuthStateChange(function(ev, session){ S.authEmail=(session&&session.user&&session.user.email)||""; if(ev==="SIGNED_IN"){ S.role="account"; S.accStage="home"; render(); } }); }catch(e){} }
+if(sb){ try{ refreshAuth(); sb.auth.onAuthStateChange(function(ev, session){ S.authEmail=(session&&session.user&&session.user.email)||""; S.myShops=undefined; if(ev==="SIGNED_IN"){ S.role="account"; S.accStage="home"; render(); } }); }catch(e){} }
 async function hydrate(){
   if(!sb){ S.shopLoad="erro: sem conexao"; render(); return; }
   S.shopLoad="loading"; render();
