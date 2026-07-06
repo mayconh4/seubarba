@@ -452,7 +452,7 @@ function renderClient(){
       h+=`</div>`;
       if(slots.length && !temLivre) h+=`<div class="lr" style="justify-content:center;color:var(--mut);text-align:center;margin-top:10px">Nenhum horário livre neste dia. Escolha outro dia.</div>`;
       h+=`<div class="hint">${labelDia(S.dia).top} · ${S.service.nome} (${S.service.dur} min). Horários riscados estão indisponíveis.</div>`;
-      if(S.time!==null) h+=`<button class="btn" data-a="next">Confirmar e pagar</button>`;
+      if(S.time!==null) h+=`<button class="btn" data-a="next">Agendar agora</button>`;
     }
   }
   if(S.step===4 && !S.pixGen){
