@@ -365,8 +365,8 @@ function renderClient(){
   if(S.step===1){
     const shopBarbers = barbers.filter(b=> S.shop.barbers.includes(b.id));
     h+=`<div class="eyebrow">${S.shop.nome} · Passo 1 de 4</div><h1>Quem corta seu cabelo?</h1>`;
-    h+=`<div class="tile ${S.barber==='any'?'sel':''}" data-a="b:any"><div class="ic">${ICONS.star}</div><div><div class="nm">Qualquer um</div><div class="sb">Primeiro horário livre</div></div><div class="ar">&rsaquo;</div></div>`;
     shopBarbers.forEach(b=> h+=`<div class="tile ${S.barber===b.id?'sel':''}" data-a="b:${b.id}"><div class="ic">${ini(b.nome)}</div><div><div class="nm">${b.nome}</div><div class="tags">${b.esp.join(" · ")}</div></div><div class="ar">&rsaquo;</div></div>`);
+    h+=`<div class="tile ${S.barber==='any'?'sel':''}" data-a="b:any"><div class="ic">${ICONS.star}</div><div><div class="nm">Qualquer um</div><div class="sb">Primeiro horário livre</div></div><div class="ar">&rsaquo;</div></div>`;
     h+=`<div class="hint" style="text-align:center;cursor:pointer" data-a="trocashop">Trocar de barbearia</div>`;
   }
   if(S.step===2){
