@@ -537,10 +537,12 @@ function renderClient(){
     barbershops.forEach(s=>{
       const d = s._dist? ` · ${s._dist.toFixed(1)} km`:"";
       const semBarbeiro = !s.barbers || !s.barbers.length;
-      const slot = semBarbeiro? "em breve" : (s.slots? "horários disponíveis":"sem horários hoje");
-      // sem barbeiro cadastrado: aparece na lista mas não é clicável
-      const click = semBarbeiro? "" : ` data-a="shop:${s.id}"`;
-      h+=`<div class="tile ${(s.slots&&!semBarbeiro)?'':'off'}"${click} style="${semBarbeiro?'cursor:default':''}"><div class="ic">${ICONS.shop}</div><div style="flex:1"><div class="nm">${s.nome}</div><div class="sb">${s.bairro}${d} · ${slot}</div></div>${semBarbeiro?'':'<div class="ar">&rsaquo;</div>'}</div>`;
+      const semLoc = s.lat==null || s.lng==null;
+      const indisp = semBarbeiro || semLoc;
+      const slot = indisp? "em breve" : (s.slots? "horários disponíveis":"sem horários hoje");
+      // sem barbeiro ou sem localização: aparece na lista mas não é clicável
+      const click = indisp? "" : ` data-a="shop:${s.id}"`;
+      h+=`<div class="tile ${(s.slots&&!indisp)?'':'off'}"${click} style="${indisp?'cursor:default':''}"><div class="ic">${ICONS.shop}</div><div style="flex:1"><div class="nm">${s.nome}</div><div class="sb">${s.bairro}${d} · ${slot}</div></div>${indisp?'':'<div class="ar">&rsaquo;</div>'}</div>`;
     });
     }
     main.innerHTML=h; return;
@@ -975,6 +977,8 @@ function obValidStep(){
   if(firstErr){ formErr("Preencha os campos destacados."); firstErr.focus(); return false; }
   // foto é obrigatória: sem ela a barbearia/freelancer não fica ativa
   if(key==="barbearia" && !getAvatar("studio")){ formErr("Adicione uma foto do seu studio — sem foto a barbearia não fica ativa para os clientes."); return false; }
+  // localização é obrigatória: sem ela a barbearia não aparece ativa na página inicial
+  if(key==="endereco" && (S.obDraft.lat==null || S.obDraft.lng==null)){ formErr("Adicione a localização (GPS) — sem ela a barbearia não fica ativa na página inicial."); return false; }
   if(key==="dados" && S.barberType==="freelancer" && !getAvatar("freela")){ formErr("Adicione uma foto de perfil — sem foto seu perfil não fica ativo para as barbearias."); return false; }
   return true;
 }
@@ -1198,6 +1202,7 @@ function renderBarber(){
   if(S.freelaAviso){ h+=`<div class="ok" style="margin-bottom:14px"><b>Perfil criado!</b><p>Você já pode se candidatar às vagas abertas. Seu perfil fica visível para as barbearias da região.</p></div>`; S.freelaAviso=false; }
   // foto obrigatória para ficar ativo: aviso para contas que ainda não têm
   if(dono && !getAvatar("studio")) h+=`<div class="errmsg" style="margin-bottom:14px"><b>Sua barbearia não está ativa:</b> adicione uma foto do studio na aba <b>Conta</b> para aparecer aos clientes.</div>`;
+  if(dono && S.dashShop && (S.dashShop.lat==null || S.dashShop.lng==null)) h+=`<div class="errmsg" style="margin-bottom:14px"><b>Sua barbearia não está ativa na página inicial:</b> adicione a localização (GPS) na aba <b>Conta</b>.</div>`;
   if(!dono && isFreela() && !getAvatar("freela")) h+=`<div class="errmsg" style="margin-bottom:14px"><b>Seu perfil não está ativo:</b> adicione uma foto de perfil na aba <b>Conta</b> para aparecer às barbearias.</div>`;
   if(S.tab==="equipe"){
     h+=`<div class="eyebrow">${profile?profile.nomeFantasia:'Barbearia'}</div><h1 class="bg">Equipe</h1>
