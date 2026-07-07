@@ -230,11 +230,11 @@ let services = [
 ];
 const horario = { abre:8, fecha:19, almocoIni:12, almocoFim:13 };
 let appointments = [
-  { id:"a1", barbeiro:"b1", cliente:"Carlos", service:"s1", min:8*60+30, valor:45, status:"pago" },
-  { id:"a2", barbeiro:"b1", cliente:"Pedro",  service:"s2", min:9*60,    valor:60, status:"pago" },
-  { id:"a3", barbeiro:"b1", cliente:"Rafael", service:"s1", min:10*60,   valor:45, status:"aguardando" },
-  { id:"a4", barbeiro:"b1", cliente:"Bruno",  service:"s4", min:14*60,   valor:50, status:"pago" },
-  { id:"a5", barbeiro:"b1", cliente:"Tiago",  service:"s3", min:15*60,   valor:30, status:"cancelado" },
+  { id:"a1", barbeiro:"b1", cliente:"Carlos", service:"s1", min:8*60+30, valor:45, status:"pago", zap:"11988880001" },
+  { id:"a2", barbeiro:"b1", cliente:"Pedro",  service:"s2", min:9*60,    valor:60, status:"pago", zap:"11988880002" },
+  { id:"a3", barbeiro:"b1", cliente:"Rafael", service:"s1", min:10*60,   valor:45, status:"aguardando", zap:"11988880003" },
+  { id:"a4", barbeiro:"b1", cliente:"Bruno",  service:"s4", min:14*60,   valor:50, status:"pago", zap:"11988880004" },
+  { id:"a5", barbeiro:"b1", cliente:"Tiago",  service:"s3", min:15*60,   valor:30, status:"cancelado", zap:"11988880005" },
 ];
 
 // barbearias disponíveis para o cliente escolher (com coordenadas p/ "mais próxima")
@@ -261,7 +261,61 @@ function freelaKey(){ return "sb_freela_"+(S.authEmail||"").toLowerCase(); }
 function saveFreela(d){ try{ localStorage.setItem(freelaKey(), JSON.stringify(d)); }catch(e){} }
 function loadFreela(){ try{ const r=localStorage.getItem(freelaKey()); return r?JSON.parse(r):null; }catch(e){ return null; } }
 function clearFreela(){ try{ localStorage.removeItem(freelaKey()); }catch(e){} }
+// salva a edição do perfil do freelancer (aba Conta)
+function fpSave(){
+  const fp = profile || loadFreela() || { tipo:"freelancer" };
+  const g = id => { const el=document.getElementById(id); return el?el.value.trim():undefined; };
+  const nome=g("fpNome"), doc=g("fpDoc"), tel=g("fpTel"), nasc=g("birthDate");
+  if(nome!==undefined) fp.respNome=nome;
+  if(doc!==undefined) fp.cpfCnpj=doc;
+  if(tel!==undefined) fp.mobilePhone=tel;
+  if(nasc!==undefined) fp.birthDate=nasc;
+  fp.tipo="freelancer";
+  profile=fp; saveFreela(fp);
+  S.fpEdit=false; render();
+}
 function isFreela(){ return !!(profile && profile.tipo==="freelancer") || !!loadFreela(); }
+// tipo de perfil escolhido por conta: cliente | freelancer | studio
+function ptypeKey(){ return "sb_ptype_"+(S.authEmail||"").toLowerCase(); }
+function getPtype(){ try{ return localStorage.getItem(ptypeKey())||""; }catch(e){ return ""; } }
+function setPtype(t){ try{ localStorage.setItem(ptypeKey(), t); }catch(e){} }
+// foto de perfil por conta e escopo (cliente/freela/studio), guardada como dataURL
+function avatarKey(scope){ return "sb_avatar_"+scope+"_"+(S.authEmail||"").toLowerCase(); }
+function getAvatar(scope){ try{ return localStorage.getItem(avatarKey(scope))||""; }catch(e){ return ""; } }
+function avatarHtml(scope, name, size){
+  size = size||64;
+  const src = getAvatar(scope);
+  if(src) return `<img src="${src}" alt="" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;flex:none">`;
+  return `<div class="av" style="width:${size}px;height:${size}px;font-size:${Math.round(size/2.6)}px;display:flex;align-items:center;justify-content:center;flex:none">${ini(name||"?")}</div>`;
+}
+// chave/valor simples por conta logada (promoção, plano, etc.)
+function lsGet(k){ try{ return localStorage.getItem(k+"_"+(S.authEmail||"").toLowerCase())||""; }catch(e){ return ""; } }
+function lsSet(k,v){ try{ if(v===null||v==="") localStorage.removeItem(k+"_"+(S.authEmail||"").toLowerCase()); else localStorage.setItem(k+"_"+(S.authEmail||"").toLowerCase(), v); }catch(e){} }
+// avatar de terceiros (equipe/rede): usa a foto do perfil se existir, senão iniciais
+function pAvatar(p, size){
+  size = size||44;
+  if(p && p.foto) return `<img src="${p.foto}" alt="" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;flex:none">`;
+  return `<div class="av" style="width:${size}px;height:${size}px;flex:none">${ini((p&&p.nome)||"?")}</div>`;
+}
+function fotoBtn(scope){
+  return `<label class="btn out small" style="margin:0;cursor:pointer">Trocar foto<input type="file" accept="image/*" data-av="${scope}" style="display:none"></label>`;
+}
+// redimensiona a imagem escolhida para 96px e salva
+document.addEventListener("change", function(e){
+  const inp = e.target; if(!inp || !inp.dataset || !inp.dataset.av || !inp.files || !inp.files[0]) return;
+  const scope = inp.dataset.av, f = inp.files[0];
+  const img = new Image();
+  img.onload = function(){
+    const c = document.createElement("canvas"); const s = 96;
+    c.width = s; c.height = s;
+    const r = Math.max(s/img.width, s/img.height);
+    const w = img.width*r, h2 = img.height*r;
+    c.getContext("2d").drawImage(img, (s-w)/2, (s-h2)/2, w, h2);
+    try{ localStorage.setItem(avatarKey(scope), c.toDataURL("image/jpeg", .82)); }catch(err){}
+    URL.revokeObjectURL(img.src); render();
+  };
+  img.src = URL.createObjectURL(f);
+});
 
 // fidelidade: nº de cortes acumulados por cliente (10 = próximo grátis, depois zera)
 let fidelidade = { Carlos:9, Pedro:10, Rafael:6, Bruno:3, Tiago:1 };
@@ -291,6 +345,8 @@ let profissionais = [
   { nome:"Rafa Lima", esp:["Social","Sobrancelha"], nota:4.8, dist:"5,5 km", invited:false },
 ];
 
+// desconto opcional no próximo corte, por cliente (agenda)
+let descontos = {};
 // freelancers da barbearia (dono define a comissão de cada um)
 let team = [
   { nome:"Pedro Santos", comissao:40 },
@@ -611,6 +667,13 @@ function renderOnboarding(){
   }
   else if(key==="dados"){
     h += field("respNome","Nome completo",{ph:"Nome e sobrenome",val:obVal("respNome")});
+    if(free){
+      h += `<div class="grid2">`+
+        field("cpfCnpj","CPF ou CNPJ",{ph:"Somente números",val:obVal("cpfCnpj")})+
+        field("companyType","Tipo",{val:obVal("companyType")||"INDIVIDUAL",opts:[
+          {v:"INDIVIDUAL",t:"Pessoa Física"},{v:"MEI",t:"MEI"},{v:"LIMITED",t:"CNPJ (LTDA)"}]})+
+        `</div>`;
+    }
     h += `<div class="grid2">`+
       field("email","E-mail",{type:"email",ph:"voce@email.com",val:obVal("email")})+
       field("mobilePhone","Celular (WhatsApp)",{ph:"(11) 99999-9999",val:obVal("mobilePhone")})+
@@ -697,7 +760,7 @@ const CATALOGO = [
 ];
 const OB_FIELDS = {
   barbearia: ["nomeFantasia","cpfCnpj","companyType","incomeValue"],
-  dados: ["respNome","email","mobilePhone","birthDate"],
+  dados: ["respNome","cpfCnpj","companyType","email","mobilePhone","birthDate"],
   endereco: ["postalCode","addressNumber","address","province"],
   horarios: ["abre","fecha","almocoIni","almocoFim"],
 };
@@ -860,10 +923,17 @@ function renderAccount(){
         h += `<div class="box" style="margin-bottom:10px"><div style="display:flex;align-items:center;gap:10px"><div style="flex:1"><div class="nm" style="font-size:15px">${sp.nome||"(sem nome)"}</div><div class="sb">${sp.bairro||""}</div></div>${st}</div>
           <div class="fidwrap" style="justify-content:flex-end;gap:8px;flex-wrap:wrap"><button class="btn small" data-a="dash:${sp.id}">Painel da barbearia</button><button class="btn out small" data-a="shopEdit:${sp.id}:account">Editar</button><button class="btn out small" data-a="admBarb:${sp.id}:account">Equipe</button><button class="btn out small" data-a="svcOpen:${sp.id}:account">Serviços</button></div></div>`;
       });
+    } else if(!S.acctType){
+      h += `<h1 class="bg">Quem é você?</h1><div class="hint" style="margin-top:-6px;margin-bottom:14px">Escolha seu perfil para entrar ou criar sua conta.</div>`;
+      h += `<div class="tile" data-a="ptype:cliente"><div class="ic">${ICONS.combo||ICONS.user}</div><div style="flex:1"><div class="nm">Sou cliente</div><div class="tags">Agendar cortes e acompanhar minha fidelidade</div></div><div class="ar">&rsaquo;</div></div>`;
+      h += `<div class="tile" data-a="ptype:freelancer"><div class="ic">${ICONS.user}</div><div style="flex:1"><div class="nm">Sou freelancer</div><div class="tags">Encontrar vagas em barbearias</div></div><div class="ar">&rsaquo;</div></div>`;
+      h += `<div class="tile" data-a="ptype:studio"><div class="ic">${ICONS.shop}</div><div style="flex:1"><div class="nm">Tenho studio</div><div class="tags">Gerenciar minha barbearia e equipe</div></div><div class="ar">&rsaquo;</div></div>`;
     } else {
-      h += `<h1 class="bg">Sua conta</h1><div class="hint" style="margin-top:-6px;margin-bottom:14px">Acesse sua conta ou crie uma nova.</div>`;
+      const PT = { cliente:"Cliente", freelancer:"Freelancer", studio:"Studio" };
+      h += `<h1 class="bg">Sua conta</h1><div class="lr"><span class="c">Perfil</span><b>${PT[S.acctType]}</b></div>`;
       h += `<button class="btn" data-a="accLogin">Acessar conta</button>`;
       h += `<button class="btn out" data-a="accSignup">Criar conta</button>`;
+      h += `<div class="hint" style="text-align:center;margin-top:12px;cursor:pointer" data-a="ptypeBack">Trocar perfil</div>`;
     }
   }
   main.innerHTML = h;
@@ -893,6 +963,50 @@ async function doSignup(){
 }
 async function accLogout(){ try{ await sb.auth.signOut(); }catch(e){} S.authEmail=""; S.myShops=undefined; S.myShopsPromise=null; S.accStage="home"; goHome(); }
 
+/* ---------- Painel do cliente (Minha conta · perfil cliente) ---------- */
+function cnameKey(){ return "sb_cname_"+(S.authEmail||"").toLowerCase(); }
+function getCName(){ try{ return localStorage.getItem(cnameKey())||""; }catch(e){ return ""; } }
+function saveCName(){ const i=document.getElementById("cpNome"); if(!i) return; try{ localStorage.setItem(cnameKey(), i.value.trim()); }catch(e){} S.cpEdit=false; render(); }
+function renderClientPanel(){
+  tabbar.style.display="none"; steps.style.display="none";
+  const em = S.authEmail || "";
+  const nome = getCName() || em.split("@")[0];
+  let h = `<div class="eyebrow">Minha conta</div><h1 class="bg">Meu perfil</h1>`;
+  // cartão do perfil: foto + nome + e-mail
+  h += `<div class="box" style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:14px">
+    ${avatarHtml("cliente", nome, 64)}
+    <div style="flex:1"><div class="nm" style="font-size:17px">${nome}</div><div class="sb">${em}</div></div>
+  </div>
+  <div class="fidwrap" style="border-top-color:rgba(0,0,0,.05);justify-content:flex-end;gap:8px">
+    ${fotoBtn("cliente")}
+    <button class="btn out small" data-a="cpEdit" style="margin:0">${S.cpEdit?'Cancelar':'Editar perfil'}</button>
+  </div></div>`;
+  if(S.cpEdit){
+    h += `<div class="box" style="margin-bottom:14px">
+      <div class="field"><label>Nome</label><input id="cpNome" value="${getCName()}" placeholder="Seu nome"></div>
+      <button class="btn" data-a="cpSave" style="margin:0">Salvar</button></div>`;
+  }
+  // fidelidade: quantos cortes faltam para o gratuito
+  const cortes = fidelidade[nome]!==undefined ? fidelidade[nome] : 0;
+  const filled = cortes%10, faltam = 10-filled;
+  let segs=""; for(let i=0;i<10;i++) segs+=`<div class="fseg ${i<filled?'on':''}"></div>`;
+  h += `<div class="eyebrow" style="margin:8px 0 10px">Fidelidade</div>
+    <div class="box" style="margin-bottom:14px">
+      <div class="fidwrap" style="border:none;padding:0;margin:0"><div class="fid">${segs}</div><span class="fidlbl">${filled}/10</span></div>
+      <div class="boxtxt" style="margin-top:8px">${filled===0?'Complete 10 cortes e o próximo é grátis.':'Faltam <b>'+faltam+'</b> corte'+(faltam===1?'':'s')+' para o seu corte grátis!'}</div>
+    </div>`;
+  // agendamentos do cliente
+  const meus = appointments.filter(a=>a.cliente===nome && a.status!=="cancelado");
+  h += `<div class="eyebrow" style="margin:8px 0 10px">Meus agendamentos</div>`;
+  if(!meus.length) h += `<div class="lr" style="justify-content:center;color:var(--mut)">Nenhum agendamento por enquanto.</div><button class="btn" data-a="cpAgendar" style="margin-top:10px">Agendar um corte</button>`;
+  else meus.forEach(a=>{
+    const s=services.find(x=>x.id===a.service)||{nome:"Serviço"};
+    h += `<div class="lr"><div><b>${hhmm(a.min)}</b> · ${s.nome}</div><span class="c">${fmt(a.valor)}</span></div>`;
+  });
+  h += `<button class="btn out" data-a="accLogout" style="margin-top:18px">Sair</button>`;
+  main.innerHTML = h;
+}
+
 /* ---------- Barbeiro ---------- */
 function renderBarber(){
   steps.style.display="none"; tabbar.style.display="flex";
@@ -911,7 +1025,7 @@ function renderBarber(){
     team.forEach((f,i)=>{
       h+=`<div class="box" style="margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:12px">
-          <div class="av">${ini(f.nome)}</div>
+          ${pAvatar(f, 44)}
           <div style="flex:1"><div class="nm" style="font-size:16px">${f.nome}</div><div class="sb" id="rec${i}">Receberia ${fmt(2000*f.comissao/100)} em R$ 2.000</div></div>
           <button class="iconbtn" data-a="delfree:${i}" title="Remover" aria-label="Remover">&times;</button>
         </div>
@@ -969,7 +1083,7 @@ function renderBarber(){
         if(dono) act = p.invited?`<span class="chip ok">Convidado</span>`:`<button class="btn out small" data-a="invite:${i}">Convidar</button>`;
         h+=`<div class="box" style="margin-bottom:12px">
           <div style="display:flex;align-items:center;gap:12px">
-            <div class="av">${ini(p.nome)}</div>
+            ${pAvatar(p, 44)}
             <div style="flex:1"><div class="nm" style="font-size:16px">${p.nome}</div><div class="sb">${p.esp.join(" · ")}</div></div>
             <div style="text-align:right"><div class="sb" style="display:flex;align-items:center;gap:3px;justify-content:flex-end">${stars(p.nota)}</div><div class="sb">${p.dist}</div></div>
           </div>
@@ -1016,6 +1130,10 @@ function renderBarber(){
       let segs=""; for(let i=0;i<10;i++) segs+=`<div class="fseg ${i<filled?(free?'free':'on'):''}"></div>`;
       const giftSm=`<svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13" style="vertical-align:-2px;margin-right:3px"><path d="M11 8H4.6c-.6 0-1.1.5-1.1 1.1v2.3c0 .4.3.7.7.7H11V8Zm2 0v4.1h6.8c.4 0 .7-.3.7-.7V9.1c0-.6-.5-1.1-1.1-1.1H13Zm-2 6H5v6.1c0 .5.4.9.9.9H11v-7Zm2 0v7h5.1c.5 0 .9-.4.9-.9V14h-6ZM8.2 3.3C9.7 2.8 11 4.4 11.6 6.3H9.9c-1.1 0-2.1-.5-2.4-1.4-.2-.7.1-1.4.7-1.6Zm7.6 0c.6.2.9.9.7 1.6-.3.9-1.3 1.4-2.4 1.4h-1.7C13 4.4 14.3 2.8 15.8 3.3Z"/></svg>`;
       const flbl = free ? `<span class="fidlbl free">${giftSm}Próximo grátis</span>` : `<span class="fidlbl">${filled}/10</span>`;
+      const waMsg = encodeURIComponent(`Olá ${a.cliente}! Aqui é da ${profile?(profile.nomeFantasia||"barbearia"):"barbearia"} 💈 Sobre seu horário de ${hhmm(a.min)} hoje.`);
+      const waBtn = a.zap? `<a class="wabtn" href="https://wa.me/55${a.zap}?text=${waMsg}" target="_blank" rel="noopener"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15l-1.3 4.7 4.8-1.3A10 10 0 1 0 12 2zm5.9 14.3c-.2.7-1.4 1.3-2 1.4-.5.1-1.2.1-1.9-.1-.4-.1-1-.3-1.7-.6-3-1.3-4.9-4.3-5-4.5-.2-.2-1.2-1.6-1.2-3s.7-2.1 1-2.4c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.1.1.3 0 .5l-.4.5-.3.3c-.2.2-.3.4-.2.6.2.4.8 1.3 1.6 2 .9.9 1.7 1.1 2 1.3.2.1.4.1.6-.1l.7-.9c.2-.2.4-.2.6-.1l1.9.9c.3.1.4.2.5.3.1.2.1.7-.1 1.3z"/></svg>WhatsApp</a>` : "";
+      const descOn = !!descontos[a.cliente];
+      const descBtn = `<button class="btn ${descOn?'':'out'} small" data-a="descTg:${a.cliente}" style="margin:0">${descOn?'✓ Desconto '+noShowDiscount+'% próx. corte':'Dar desconto próx. corte'}</button>`;
       h+=`<div class="ag" style="flex-direction:column;align-items:stretch;gap:11px">
         <div style="display:flex;align-items:center;gap:14px">
           <div class="hm">${hhmm(a.min)}</div>
@@ -1023,6 +1141,7 @@ function renderBarber(){
           <div class="chip" style="background:${bg[a.status]};color:${fg[a.status]}">${lab[a.status]}</div>
         </div>
         <div class="fidwrap"><div class="fid">${segs}</div>${flbl}</div>
+        <div class="fidwrap" style="border-top-color:rgba(0,0,0,.05);justify-content:flex-end;gap:8px;flex-wrap:wrap">${waBtn}${descBtn}</div>
       </div>`;
     });
   }
@@ -1049,6 +1168,37 @@ function renderBarber(){
         <button class="btn out small" data-a="metaedit">Configurar meta</button>
       </div>`;
     }
+    if(dono){
+      // Promoção do mês (opcional, só studio)
+      const promo = lsGet("sb_promo");
+      h+=`<div class="eyebrow" style="margin:24px 0 10px">Promoção do mês</div>`;
+      if(S.promoEdit){
+        h+=`<div class="box" style="margin-bottom:14px">
+          <div class="field"><label>Descreva a promoção</label><input id="promoTxt" value="${promo||""}" placeholder="Ex.: Corte + barba = sobrancelha grátis"></div>
+          <button class="btn" data-a="promoSave" style="margin:0">Salvar promoção</button>
+          ${promo?`<button class="btn out" data-a="promoDel" style="margin-top:8px">Remover promoção</button>`:""}</div>`;
+      } else if(promo){
+        h+=`<div class="box" style="margin-bottom:14px"><div class="boxtxt"><b>${promo}</b></div>
+          <div class="fidwrap" style="border-top-color:rgba(0,0,0,.05);justify-content:flex-end"><button class="btn out small" data-a="promoEdit" style="margin:0">Editar</button></div></div>`;
+      } else {
+        h+=`<button class="btn out" data-a="promoEdit" style="margin:0 0 14px">+ Criar promoção do mês</button>`;
+      }
+      // Plano de fidelidade (opcional, só studio)
+      const plano = lsGet("sb_plano");
+      h+=`<div class="eyebrow" style="margin:10px 0 10px">Plano de fidelidade</div>`;
+      if(S.planoEdit){
+        h+=`<div class="box" style="margin-bottom:14px">
+          <div class="field"><label>Valor mensal (R$)</label><input id="planoVal" type="number" value="${plano||140}" min="0"></div>
+          <div class="boxtxt" style="margin-bottom:10px">O cliente paga um valor fixo por mês e corta quantas vezes quiser.</div>
+          <button class="btn" data-a="planoSave" style="margin:0">Ativar plano</button>
+          ${plano?`<button class="btn out" data-a="planoDel" style="margin-top:8px">Desativar plano</button>`:""}</div>`;
+      } else if(plano){
+        h+=`<div class="box" style="margin-bottom:14px"><div class="boxtxt"><b>Pague ${fmt(+plano)}/mês e corte quantas vezes quiser.</b></div>
+          <div class="fidwrap" style="border-top-color:rgba(0,0,0,.05);justify-content:flex-end"><span class="chip ok">Ativo</span><button class="btn out small" data-a="planoEdit" style="margin:0 0 0 8px">Editar</button></div></div>`;
+      } else {
+        h+=`<button class="btn out" data-a="planoEdit" style="margin:0 0 14px">+ Criar plano mensal ilimitado</button>`;
+      }
+    }
     h+=`<div class="eyebrow" style="margin:24px 0 10px">Fidelização</div>`;
     h+=`<div class="lr"><span>Carlos · 9 cortes</span><span class="c">falta 1 p/ grátis</span></div>`;
     lembretes.forEach(c=>{
@@ -1061,19 +1211,52 @@ function renderBarber(){
   if(S.tab==="conta"){
     const em = S.authEmail || "";
     if(!dono && isFreela() && !(S.myShops && S.myShops.length)){
-      h+=`<div class="eyebrow">Minha conta</div><h1 class="bg">Meu perfil</h1>`;
-      if(em) h+=`<div class="lr"><span class="c">Logado como</span><b>${em}</b></div>`;
       const fp = profile || loadFreela() || {};
-      if(fp.respNome) h+=`<div class="lr"><span class="c">Nome</span><b>${fp.respNome}</b></div>`;
-      if(fp.mobilePhone) h+=`<div class="lr"><span class="c">WhatsApp</span><b>${fp.mobilePhone}</b></div>`;
-      h+=`<div class="lr"><span class="c">Tipo</span><b>Freelancer</b></div>`;
+      const esp = Object.keys(fp.svc||{}).map(k=>{ const c=CATALOGO.find(x=>x.key===k); return c?c.nome:k; });
+      const idade = (function(){ const m=/^(\d{2})\/(\d{2})\/(\d{4})$/.exec(fp.birthDate||""); if(!m) return null;
+        const hoje=new Date(); let a=hoje.getFullYear()-(+m[3]); if(hoje.getMonth()+1<+m[2]||(hoje.getMonth()+1===+m[2]&&hoje.getDate()<+m[1])) a--; return a; })();
+      const nAval = (fp.avals||[]).length;
+      const nota = nAval ? (fp.avals.reduce((t,x)=>t+x,0)/nAval).toFixed(1) : null;
+      h+=`<div class="eyebrow">Minha conta</div><h1 class="bg">Meu perfil</h1>`;
+      h+=`<div class="box" style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:14px">
+        ${avatarHtml("freela", fp.respNome||em, 64)}
+        <div style="flex:1"><div class="nm" style="font-size:17px">${fp.respNome||"Freelancer"}</div>
+          <div class="sb">${em}</div>
+          <div class="sb" style="display:flex;align-items:center;gap:4px;margin-top:2px"><span class="rstar">${ICONS.star.replace('width="23" height="23"','width="13" height="13"')}</span> ${nota?nota+" · "+nAval+" avaliações":"Sem avaliações ainda"}</div></div>
+      </div>
+      <div class="fidwrap" style="border-top-color:rgba(0,0,0,.05);justify-content:flex-end;gap:8px">
+        ${fotoBtn("freela")}
+        <button class="btn out small" data-a="fpEdit" style="margin:0">${S.fpEdit?'Cancelar':'Editar perfil'}</button>
+      </div></div>`;
+      if(S.fpEdit){
+        h+=`<div class="box" style="margin-bottom:14px">
+          <div class="field"><label>Nome completo</label><input id="fpNome" value="${fp.respNome||""}"></div>
+          <div class="grid2">
+            <div class="field"><label>CPF/CNPJ</label><input id="fpDoc" value="${fp.cpfCnpj||""}" placeholder="Somente números"></div>
+            <div class="field"><label>WhatsApp</label><input id="fpTel" value="${fp.mobilePhone||""}" placeholder="(11) 99999-9999"></div>
+          </div>
+          <div class="field"><label>Data de nascimento</label><input id="birthDate" type="tel" value="${fp.birthDate||""}" placeholder="dd/mm/aaaa"></div>
+          <div class="sllbl" style="margin-bottom:8px">Especializações</div>
+          ${svcPicker(fp.svc||(fp.svc={}), "fpsvc", "fpdur_")}
+          <button class="btn" data-a="fpSave" style="margin-top:8px">Salvar perfil</button></div>`;
+      } else {
+        if(fp.cpfCnpj) h+=`<div class="lr"><span class="c">${(fp.companyType&&fp.companyType!=="INDIVIDUAL")?"CNPJ":"CPF"}</span><b>${fp.cpfCnpj}</b></div>`;
+        if(fp.mobilePhone) h+=`<div class="lr"><span class="c">WhatsApp</span><b>${fp.mobilePhone}</b></div>`;
+        if(idade!=null) h+=`<div class="lr"><span class="c">Idade</span><b>${idade} anos</b></div>`;
+        if(esp.length) h+=`<div class="lr"><span class="c">Especializações</span><b style="text-align:right">${esp.join(" · ")}</b></div>`;
+        h+=`<div class="lr"><span class="c">Tipo de conta</span><b>Freelancer</b></div>`;
+      }
       h+=`<button class="btn out" data-a="expandir" style="margin-top:14px">Expandir meu negócio</button>`;
       h+=`<div class="hint" style="margin-top:6px;text-align:center">Cadastre sua barbearia, monte equipe e contrate freelancers.</div>`;
       h+=`<button class="btn out" data-a="accLogout" style="margin-top:10px">Sair</button>`;
       main.innerHTML=h; return;
     }
     h+=`<div class="eyebrow">Minha conta</div><h1 class="bg">Sua barbearia</h1>`;
-    if(em) h+=`<div class="lr"><span class="c">Logado como</span><b>${em}</b></div>`;
+    h+=`<div class="box" style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:14px">
+      ${avatarHtml("studio", (profile&&profile.nomeFantasia)||em, 64)}
+      <div style="flex:1"><div class="nm" style="font-size:17px">${(profile&&profile.nomeFantasia)||"Studio"}</div><div class="sb">${em}</div></div>
+    </div>
+    <div class="fidwrap" style="border-top-color:rgba(0,0,0,.05);justify-content:flex-end">${fotoBtn("studio")}</div></div>`;
     h+=`<div class="sllbl" style="margin:18px 0 8px">Minhas barbearias</div>`;
     if(S.myShops===undefined || S.myShops===null){ h+=`<div class="lr" style="justify-content:center;color:var(--mut)">Carregando…</div>`; loadMyShops(); }
     else if(!S.myShops.length){ h+=`<div class="lr" style="justify-content:center;color:var(--mut)">Você ainda não tem barbearia cadastrada.</div>`; }
@@ -1478,6 +1661,7 @@ function render(){
   if(S.barbShop){ renderAdminBarbers(); return; }
   if(S.editShop){ renderAdminEdit(); return; }
   if(S.role==="client") renderClient();
+  else if(S.role==="clientPanel") renderClientPanel();
   else if(S.role==="chooseType") renderChooseType();
   else if(S.role==="onboarding") renderOnboarding();
   else if(S.role==="cadastroEnviado") renderCadastroEnviado();
@@ -1579,6 +1763,21 @@ main.addEventListener("click", e=>{
   else if(a==="accLogout"){ accLogout(); return; }
   else if(a==="account"){ goMinhaConta(); return; }
   else if(a==="toCreate"){ S.role="chooseType"; S.barberType=null; S.obStep=null; S.obDraft=null; render(); return; }
+  else if(a.startsWith("ptype:")){ S.acctType=a.slice(6); render(); return; }
+  else if(a==="ptypeBack"){ S.acctType=null; S.accStage="home"; render(); return; }
+  else if(a==="cpEdit"){ S.cpEdit=!S.cpEdit; render(); return; }
+  else if(a==="cpSave"){ saveCName(); return; }
+  else if(a==="cpAgendar"){ goHome(); return; }
+  else if(a==="fpEdit"){ S.fpEdit=!S.fpEdit; render(); return; }
+  else if(a==="fpSave"){ fpSave(); return; }
+  else if(a==="promoEdit"){ S.promoEdit=true; render(); return; }
+  else if(a==="promoSave"){ const i=document.getElementById("promoTxt"); lsSet("sb_promo", i?i.value.trim():""); S.promoEdit=false; render(); return; }
+  else if(a==="promoDel"){ lsSet("sb_promo", null); S.promoEdit=false; render(); return; }
+  else if(a==="planoEdit"){ S.planoEdit=true; render(); return; }
+  else if(a==="planoSave"){ const i=document.getElementById("planoVal"); lsSet("sb_plano", i&&+i.value>0 ? String(+i.value) : ""); S.planoEdit=false; render(); return; }
+  else if(a==="planoDel"){ lsSet("sb_plano", null); S.planoEdit=false; render(); return; }
+  else if(a.startsWith("descTg:")){ const c=a.slice(7); if(descontos[c]) delete descontos[c]; else descontos[c]=noShowDiscount||10; render(); return; }
+  else if(a.startsWith("fpsvc:")){ const key=a.slice(6); const fp=profile||loadFreela()||{}; if(!fp.svc) fp.svc={}; if(fp.svc[key]) delete fp.svc[key]; else { const c=CATALOGO.find(x=>x.key===key); if(c) fp.svc[key]={dur:c.dur}; } profile=fp; render(); return; }
   else if(a==="freelaPanel"){ if(!profile) profile=loadFreela(); S.role="barber"; S.tab="rede"; render(); return; }
   else if(a==="expandir"){ S.barberType="dono"; S.role="onboarding"; S.obStep=null; S.obDraft=null; render(); return; }
   else if(a==="toAdmin"){ S.role="admin"; render(); admLoad(); return; }
@@ -1619,11 +1818,7 @@ const menu = document.getElementById("menu");
 const userBtn = document.getElementById("userBtn");
 const I = { scissors:ICONS.scissors, user:ICONS.user, cut:ICONS.combo };
 function buildMenu(){
-  let h="";
-  if(S.role==="client") h+=`<div class="mi" data-m="barber">${I.scissors} Sou barbeiro</div>`;
-  else h+=`<div class="mi" data-m="client">${I.cut} Sou cliente</div>`;
-  h+=`<div class="sep"></div><div class="mi" data-m="account">${I.user} Minha conta</div>`;
-  menu.innerHTML=h;
+  menu.innerHTML = `<div class="mi" data-m="account">${I.user} Minha conta</div>`;
 }
 function toggleMenu(open){ const show = open===undefined ? menu.hidden : open; if(show){ buildMenu(); menu.hidden=false; } else menu.hidden=true; }
 userBtn.addEventListener("click", e=>{ e.stopPropagation(); toggleMenu(); });
@@ -1640,19 +1835,31 @@ if(brand){
   brand.addEventListener("click", goHome);
   brand.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); goHome(); } });
 }
-// "Minha conta": donos caem direto no painel administrativo da barbearia
+// "Minha conta": cada perfil cai na própria dashboard, na aba Conta
 async function goMinhaConta(){
   toggleMenu(false); S.afterAuth=null;
-  if(!S.authEmail){ S.role="account"; S.accStage="home"; render(); return; }
+  if(!S.authEmail){ S.role="account"; S.accStage="home"; S.acctType=null; render(); return; }
+  routeByPerfil("conta");
+}
+// decide a tela conforme o perfil da conta logada
+async function routeByPerfil(tab){
+  const t = getPtype() || (isFreela() ? "freelancer" : "");
+  if(t==="cliente"){ S.role="clientPanel"; render(); return; }
+  if(t==="freelancer"){
+    if(!profile) profile = loadFreela();
+    if(!profile){ S.barberType="freelancer"; S.role="onboarding"; S.obStep=null; S.obDraft=null; render(); return; }
+    S.role="barber"; S.tab=tab||"rede"; render(); return;
+  }
+  // studio (ou contas antigas sem tipo): tenta abrir a barbearia
   if(S.myShops===undefined || S.myShops===null){ await loadMyShops(); }
-  if(S.myShops && S.myShops.length){ openDash(S.myShops[0].id); }
-  else if(isFreela()){ if(!profile) profile=loadFreela(); S.role="barber"; S.tab="rede"; render(); }
-  else { S.role="account"; S.accStage="home"; render(); }
+  if(S.myShops && S.myShops.length){ await openDash(S.myShops[0].id); if(tab){ S.tab=tab; render(); } return; }
+  if(t==="studio"){ S.barberType="dono"; S.role="onboarding"; S.obStep=null; S.obDraft=null; render(); return; }
+  S.role="account"; S.accStage="home"; render();
 }
 // Seta de voltar no cabeçalho — só aparece onde há para onde voltar
 function canBack(){
   if(S.svcShop||S.barbShop||S.editShop||S.espEdit) return true;
-  if(S.role==="onboarding"||S.role==="chooseType"||S.role==="cadastroEnviado"||S.role==="admin"||S.role==="barber") return true;
+  if(S.role==="onboarding"||S.role==="chooseType"||S.role==="cadastroEnviado"||S.role==="admin"||S.role==="barber"||S.role==="clientPanel") return true;
   if(S.role==="account") return true;
   if(S.role==="client") return !!(S.shop || S.pixGen);
   return false;
@@ -1667,7 +1874,7 @@ function navBack(){
   if(S.role==="chooseType"){ S.role="client"; render(); return; }
   if(S.role==="cadastroEnviado"){ S.role="client"; S.step=1; S.shop=null; render(); return; }
   if(S.role==="admin"){ S.role="account"; S.accStage="home"; render(); return; }
-  if(S.role==="barber"){ goHome(); return; }
+  if(S.role==="barber"||S.role==="clientPanel"){ goHome(); return; }
   if(S.role==="account"){ if(S.accStage==="login"||S.accStage==="signup"){ S.accStage="home"; render(); } else { S.role="client"; render(); } return; }
   if(S.role==="client"){
     if(S.pixGen){ S.pixGen=false; render(); return; }
@@ -1692,7 +1899,13 @@ tabbar.addEventListener("click", e=>{ const t=e.target.closest(".tab"); if(!t)re
 const SB_URL="https://xprofyturjjhzjjjvgca.supabase.co";
 const SB_KEY="sb_publishable_y1y1j1gapNqt-7w5IMmyYg_M_Usm-7j";
 let sb=null; try{ sb = window.supabase.createClient(SB_URL, SB_KEY); }catch(e){}
-if(sb){ try{ refreshAuth(); sb.auth.onAuthStateChange(function(ev, session){ S.authEmail=(session&&session.user&&session.user.email)||""; S.myShops=undefined; S.myShopsPromise=null; if(ev==="SIGNED_IN" && S.loginPending){ S.loginPending=false; if(S.afterAuth==="chooseType"){ S.afterAuth=null; S.role="chooseType"; S.barberType=null; S.obStep=null; S.obDraft=null; render(); } else goMinhaConta(); } }); }catch(e){} }
+if(sb){ try{ refreshAuth(); sb.auth.onAuthStateChange(function(ev, session){ S.authEmail=(session&&session.user&&session.user.email)||""; S.myShops=undefined; S.myShopsPromise=null; if(ev==="SIGNED_IN" && S.loginPending){
+  S.loginPending=false;
+  // grava o perfil escolhido antes do login (se a conta ainda não tiver um)
+  if(S.acctType && !getPtype()) setPtype(S.acctType);
+  S.acctType=null; S.afterAuth=null;
+  routeByPerfil();
+} }); }catch(e){} }
 async function hydrate(){
   if(!sb){ S.shopLoad="erro: sem conexao"; render(); return; }
   S.shopLoad="loading"; render();
