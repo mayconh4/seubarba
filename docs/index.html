@@ -282,12 +282,50 @@ function obGeo(){
 // extrai coordenadas de um link do Google Maps colado (ou de "lat, lng" direto)
 function parseMapsLink(txt){
   txt = String(txt||"").trim(); if(!txt) return null;
-  const pats = [/@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/, /[?&](?:q|ll|query|destination)=(-?\d{1,2}\.\d+),\s*(-?\d{1,3}\.\d+)/, /!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/, /^(-?\d{1,2}[.,]\d+)\s*,\s*(-?\d{1,3}[.,]\d+)$/];
+  const pats = [/!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/, /@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/, /[?&](?:q|ll|query|destination)=(-?\d{1,2}\.\d+),\s*(-?\d{1,3}\.\d+)/, /^(-?\d{1,2}[.,]\d+)\s*,\s*(-?\d{1,3}[.,]\d+)$/];
   for(const re of pats){
     const m = re.exec(txt);
     if(m) return { lat: +String(m[1]).replace(",","."), lng: +String(m[2]).replace(",",".") };
   }
   return null;
+}
+// link curto (maps.app.goo.gl): resolve no servidor e devolve as coordenadas
+function isShortMaps(txt){ return /^(https?:\/\/)?(maps\.app\.goo\.gl|goo\.gl|g\.co)\//i.test(String(txt||"").trim()); }
+async function resolveMapsLink(txt){
+  try{
+    const r = await fetch(FN_PLAN, { method:"POST",
+      headers:{ "Content-Type":"application/json", "apikey": SB_KEY, "Authorization":"Bearer "+SB_KEY },
+      body: JSON.stringify({ action:"maps-resolve", url:String(txt).trim() }) });
+    const d = await r.json();
+    if(d && d.lat!=null && d.lng!=null) return { lat:+d.lat, lng:+d.lng };
+    if(d && d.finalUrl) return parseMapsLink(d.finalUrl);
+  }catch(e){}
+  return null;
+}
+// ao colar um link curto no campo de localização, resolve em segundo plano
+let _mapsTimer=null;
+document.addEventListener("input", function(e){
+  const el=e.target; if(!el || (el.id!=="obMaps" && el.id!=="edMaps")) return;
+  const v=el.value.trim();
+  if(parseMapsLink(v)){ mapsStatus(el, "✓ Localização reconhecida"); aplicaMapsLoc(el, parseMapsLink(v)); return; }
+  if(!isShortMaps(v)){ mapsStatus(el, ""); return; }
+  clearTimeout(_mapsTimer);
+  mapsStatus(el, '<span class="spin" style="width:12px;height:12px;border-width:2px;vertical-align:middle"></span> Lendo o link…');
+  _mapsTimer=setTimeout(async function(){
+    const loc = await resolveMapsLink(v);
+    if(loc){ aplicaMapsLoc(el, loc); mapsStatus(el, "✓ Localização reconhecida"); }
+    else mapsStatus(el, '<span style="color:var(--cancel)">Não consegui ler este link. Use o GPS ou o link completo.</span>');
+  }, 500);
+});
+function aplicaMapsLoc(el, loc){
+  if(!loc) return;
+  if(el.id==="obMaps" && S.obDraft){ S.obDraft.lat=loc.lat; S.obDraft.lng=loc.lng; }
+  if(el.id==="edMaps" && S.editShop){ S.editShop.lat=loc.lat; S.editShop.lng=loc.lng; }
+}
+function mapsStatus(el, html){
+  let st = el.parentNode.querySelector(".mapsst");
+  if(!st){ st=document.createElement("div"); st.className="mapsst"; st.style.cssText="font-size:12px;margin-top:5px;font-weight:600"; el.parentNode.appendChild(st); }
+  st.innerHTML = html;
 }
 // GPS no editor da barbearia (admin/dono): preenche lat/lng do formulário
 function edGeo(){
@@ -2117,7 +2155,7 @@ async function admEditSave(){
   const sp=S.editShop;
   if(!sp.nome){ const el=document.getElementById("edNome"); if(el){ el.classList.add("err"); el.focus(); } return; }
   const mapsEl=document.getElementById("edMaps");
-  if(mapsEl && mapsEl.value.trim() && !parseMapsLink(mapsEl.value)){
+  if(mapsEl && mapsEl.value.trim() && !parseMapsLink(mapsEl.value) && !(isShortMaps(mapsEl.value) && sp.lat!=null && sp.lng!=null)){
     mapsEl.classList.add("err");
     const el=document.getElementById("editerr"); if(el){ el.innerHTML=`<div class="errmsg">Não reconheci esse link. Abra o link no navegador e copie o endereço completo da barra (com os números da posição), ou use o botão de GPS.</div>`; el.scrollIntoView({block:"center"}); }
     return;

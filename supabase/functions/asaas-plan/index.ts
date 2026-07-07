@@ -29,6 +29,25 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const h = { "Content-Type": "application/json", access_token: KEY };
 
+    // resolve link curto do Google Maps (maps.app.goo.gl) até a URL completa com coordenadas
+    if (body.action === "maps-resolve") {
+      const OK_HOSTS = ["maps.app.goo.gl", "goo.gl", "g.co", "maps.google.com", "www.google.com", "google.com", "maps.googleapis.com", "www.google.com.br", "google.com.br"];
+      let url = String(body.url || "").trim();
+      for (let i = 0; i < 6; i++) {
+        let host = "";
+        try { host = new URL(url).hostname.toLowerCase(); } catch { return json({ error: "url inválida" }, 400); }
+        if (!OK_HOSTS.some((h2) => host === h2)) return json({ error: "domínio não permitido" }, 400);
+        const r = await fetch(url, { redirect: "manual", headers: { "User-Agent": "Mozilla/5.0" } });
+        const loc = r.headers.get("location");
+        if (loc) { url = new URL(loc, url).href; continue; }
+        // sem redirect: procura coordenadas no corpo da página como último recurso
+        const texto = await r.text();
+        const m = /@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/.exec(url) || /(-?\d{1,2}\.\d{4,}),(-?\d{1,3}\.\d{4,})/.exec(texto);
+        return json({ finalUrl: url, lat: m ? +m[1] : null, lng: m ? +m[2] : null });
+      }
+      return json({ finalUrl: url });
+    }
+
     // visão administrativa: pagamentos e assinaturas de toda a plataforma
     if (body.action === "admin-overview") {
       if (callerEmail(req) !== ADMIN_EMAIL) return json({ error: "acesso restrito" }, 403);
