@@ -1441,6 +1441,7 @@ function renderBarber(){
       <div style="flex:1"><div class="nm" style="font-size:17px">${(profile&&profile.nomeFantasia)||"Studio"}</div><div class="sb">${em}</div></div>
     </div>
     <div class="fidwrap" style="border-top-color:rgba(0,0,0,.05);justify-content:flex-end">${fotoBtn("studio")}</div></div>`;
+    h+=planoBox();
     h+=`<div class="sllbl" style="margin:18px 0 8px">Minhas barbearias</div>`;
     if(S.myShops===undefined || S.myShops===null){ h+=`<div class="lr" style="justify-content:center;color:var(--mut)">Carregando…</div>`; loadMyShops(); }
     else if(!S.myShops.length){ h+=`<div class="lr" style="justify-content:center;color:var(--mut)">Você ainda não tem barbearia cadastrada.</div>`; }
@@ -1457,6 +1458,71 @@ function renderBarber(){
     h+=`<button class="btn out" data-a="accLogout" style="margin-top:10px">Sair</button>`;
   }
   main.innerHTML=h;
+}
+
+/* ---------- Plano da plataforma (R$ 59,90/mês no cartão, via Asaas) ---------- */
+function planoBox(){
+  const sp = S.dashShop || (S.myShops&&S.myShops[0]) || null;
+  let h = `<div class="sllbl" style="margin:18px 0 8px">Plano da plataforma</div>`;
+  if(!sp) return h + `<div class="lr" style="justify-content:center;color:var(--mut)">Cadastre uma barbearia para ativar o plano.</div>`;
+  if(sp.plano_id){
+    h += `<div class="box" style="margin-bottom:10px">
+      <div class="lr" style="border:none;padding:0"><span class="c">Assinatura mensal</span><b>R$ 59,90/mês</b></div>
+      <div class="fidwrap" style="border-top-color:rgba(0,0,0,.05);justify-content:space-between">
+        <span class="chip ok">Plano ativo</span>
+        <button class="btn out small" data-a="planCancel" style="margin:0">Cancelar plano</button>
+      </div>
+      <div class="hint" id="planMsg" style="margin:6px 0 0"></div></div>`;
+    return h;
+  }
+  if(!S.planForm){
+    return h + `<div class="box" style="margin-bottom:10px">
+      <div class="boxtxt">Assine para manter sua barbearia ativa na plataforma: <b>R$ 59,90/mês</b> + taxa por transação, cobrado automaticamente no cartão todo mês.</div>
+      <button class="btn" data-a="planForm" style="margin:10px 0 0">Vincular cartão e ativar</button></div>`;
+  }
+  return h + `<div class="box" style="margin-bottom:10px">
+    <div class="field"><label>Nome impresso no cartão</label><input id="plNome" placeholder="Como está no cartão" value="${(profile&&profile.respNome)||sp.responsavel||""}"></div>
+    <div class="field"><label>Número do cartão</label><input id="plNum" type="tel" placeholder="0000 0000 0000 0000"></div>
+    <div class="grid2">
+      <div class="field"><label>Validade (MM/AA)</label><input id="plVal" type="tel" placeholder="MM/AA"></div>
+      <div class="field"><label>CVV</label><input id="plCvv" type="tel" placeholder="000" maxlength="4"></div>
+    </div>
+    <div class="boxtxt" style="margin-bottom:10px">Cobrança recorrente de <b>R$ 59,90/mês</b> no cartão, direto pela Asaas. Cancele quando quiser.</div>
+    <div class="hint" id="planMsg" style="margin:0 0 8px"></div>
+    <button class="btn" data-a="planSubscribe" style="margin:0">Ativar plano — R$ 59,90/mês</button>
+    <button class="btn out" data-a="planFormOff" style="margin-top:8px">Voltar</button></div>`;
+}
+function planMsg(t){ const el=document.getElementById("planMsg"); if(el) el.innerHTML=t; }
+async function planSubscribe(){
+  const sp = S.dashShop || (S.myShops&&S.myShops[0]); if(!sp) return;
+  const g=id=>{ const el=document.getElementById(id); return el?el.value.trim():""; };
+  const nome=g("plNome"), num=g("plNum").replace(/\D/g,""), val=g("plVal"), cvv=g("plCvv");
+  const mm=(/^(\d{2})\D?(\d{2,4})$/.exec(val)||[])[1], aa=(/^(\d{2})\D?(\d{2,4})$/.exec(val)||[])[2];
+  if(!nome||num.length<13||!mm||!aa||cvv.length<3){ planMsg('<span style="color:var(--cancel)">Confira os dados do cartão.</span>'); return; }
+  planMsg('<span class="spin" style="vertical-align:middle"></span> Ativando plano…');
+  try{
+    const r = await fetch(FN_PLAN, { method:"POST",
+      headers:{ "Content-Type":"application/json", "apikey": SB_KEY, "Authorization":"Bearer "+SB_KEY },
+      body: JSON.stringify({ action:"subscribe", nome, email: sp.email||S.authEmail, cpfCnpj: sp.cpf_cnpj,
+        phone: sp.telefone, postalCode: sp.cep, addressNumber: sp.numero,
+        card:{ holderName:nome, number:num, expiryMonth:mm, expiryYear:(aa.length===2?"20"+aa:aa), ccv:cvv } }) });
+    const d = await r.json();
+    if(d && d.subscriptionId){
+      try{ await sb.from("shops").update({ plano_id:d.subscriptionId }).eq("id", sp.id); }catch(e){}
+      sp.plano_id = d.subscriptionId; S.planForm=false; render();
+    } else planMsg('<span style="color:var(--cancel)">Não deu para ativar: '+((d&&d.error)||"erro")+'</span>');
+  }catch(e){ planMsg('<span style="color:var(--cancel)">Falha de conexão. Tente de novo.</span>'); }
+}
+async function planCancel(){
+  const sp = S.dashShop || (S.myShops&&S.myShops[0]); if(!sp||!sp.plano_id) return;
+  planMsg('<span class="spin" style="vertical-align:middle"></span> Cancelando…');
+  try{
+    await fetch(FN_PLAN, { method:"POST",
+      headers:{ "Content-Type":"application/json", "apikey": SB_KEY, "Authorization":"Bearer "+SB_KEY },
+      body: JSON.stringify({ action:"cancel", subscriptionId: sp.plano_id }) });
+    try{ await sb.from("shops").update({ plano_id:null }).eq("id", sp.id); }catch(e){}
+    sp.plano_id=null; render();
+  }catch(e){ planMsg('<span style="color:var(--cancel)">Falha ao cancelar. Tente de novo.</span>'); }
 }
 
 /* ---------- Admin (restrito ao e-mail do administrador) ---------- */
@@ -1962,6 +2028,10 @@ main.addEventListener("click", e=>{
   else if(a==="fpSave"){ fpSave(); return; }
   else if(a==="obGeo"){ obGeo(); return; }
   else if(a.startsWith("shopGeo:")){ shopGeo(a.slice(8)); return; }
+  else if(a==="planForm"){ S.planForm=true; render(); return; }
+  else if(a==="planFormOff"){ S.planForm=false; render(); return; }
+  else if(a==="planSubscribe"){ planSubscribe(); return; }
+  else if(a==="planCancel"){ planCancel(); return; }
   else if(a==="promoEdit"){ S.promoEdit=true; render(); return; }
   else if(a==="promoSave"){ const i=document.getElementById("promoTxt"); lsSet("sb_promo", i?i.value.trim():""); S.promoEdit=false; render(); return; }
   else if(a==="promoDel"){ lsSet("sb_promo", null); S.promoEdit=false; render(); return; }
@@ -2132,6 +2202,7 @@ async function hydrate(){
 }
 
 const FN_PIX = "https://xprofyturjjhzjjjvgca.supabase.co/functions/v1/swift-endpoint";
+const FN_PLAN = "https://xprofyturjjhzjjjvgca.supabase.co/functions/v1/asaas-plan";
 async function createPixReal(){
   try{
     const r = await fetch(FN_PIX, {
