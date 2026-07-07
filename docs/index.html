@@ -256,6 +256,12 @@ function acharMaisProxima(){
 
 // perfil cadastrado da barbearia/barbeiro (vazio até cadastrar)
 let profile = null;
+// perfil de freelancer persistido por conta (localStorage)
+function freelaKey(){ return "sb_freela_"+(S.authEmail||"").toLowerCase(); }
+function saveFreela(d){ try{ localStorage.setItem(freelaKey(), JSON.stringify(d)); }catch(e){} }
+function loadFreela(){ try{ const r=localStorage.getItem(freelaKey()); return r?JSON.parse(r):null; }catch(e){ return null; } }
+function clearFreela(){ try{ localStorage.removeItem(freelaKey()); }catch(e){} }
+function isFreela(){ return !!(profile && profile.tipo==="freelancer") || !!loadFreela(); }
 
 // fidelidade: nº de cortes acumulados por cliente (10 = próximo grátis, depois zera)
 let fidelidade = { Carlos:9, Pedro:10, Rafael:6, Bruno:3, Tiago:1 };
@@ -563,6 +569,8 @@ document.addEventListener("input", function(e){
 // Cadastro por partes: primeiro só a barbearia. Equipe, serviços e modelo
 // de atendimento são configurados depois, no menu da barbearia (Minha conta).
 function obSteps(){
+  // freelancer não cria barbearia: só perfil pessoal, serviços e disponibilidade
+  if(S.barberType==='freelancer') return ["dados","servicos","horarios"];
   return ["barbearia","dados","endereco","horarios"];
 }
 function formErr(msg){ const fe=document.getElementById("formerr"); if(fe) fe.innerHTML=`<div class="errmsg">${msg}</div>`; }
@@ -585,7 +593,7 @@ function renderOnboarding(){
   const key = S.obStep, idx = seq.indexOf(key), total = seq.length;
   const OB_TITLE = { barbearia:(free?"Seu perfil":"Sua barbearia"), dados:"Seus dados", endereco:"Endereço",
     modelo:"Como você atende?", servicos:(free?"Seus serviços":"Serviços que você faz"),
-    qtd:"Sua equipe", equipe:"Colaboradores", freelancers:"Freelancers disponíveis", horarios:"Horários" };
+    qtd:"Sua equipe", equipe:"Colaboradores", freelancers:"Freelancers disponíveis", horarios:(free?"Sua disponibilidade":"Horários") };
   let h = `<div class="eyebrow">${free?'Cadastro · Freelancer':'Cadastro · Dono de barbearia'}</div>`;
   h += `<h1 class="bg">${OB_TITLE[key]||""}</h1>`;
   h += `<div class="steps" style="display:flex;margin:0 0 16px">`;
@@ -628,7 +636,7 @@ function renderOnboarding(){
   }
   else if(key==="servicos"){
     if(!S.obDraft.svc) S.obDraft.svc = {};
-    h += `<div class="hint" style="margin-top:-6px;margin-bottom:10px">Toque nos serviços que você faz e informe o tempo de cada um. O preço você ajusta depois em “Serviços e preços”.</div>`;
+    h += `<div class="hint" style="margin-top:-6px;margin-bottom:10px">${free?'Toque nos serviços que você faz. As barbearias veem isso no seu perfil ao buscar freelancers.':'Toque nos serviços que você faz e informe o tempo de cada um. O preço você ajusta depois em “Serviços e preços”.'}</div>`;
     h += svcPicker(S.obDraft.svc, "osvc", "osvcdur_");
   }
   else if(key==="qtd"){
@@ -661,7 +669,7 @@ function renderOnboarding(){
   }
   else if(key==="horarios"){
     if(!S.obDraft.dias) S.obDraft.dias = ["seg","ter","qua","qui","sex","sab"];
-    h += `<div class="hint" style="margin-top:-6px;margin-bottom:10px">Selecione os dias e o horário de atendimento.</div>`;
+    h += `<div class="hint" style="margin-top:-6px;margin-bottom:10px">${free?'Dias e horários em que você está disponível para pegar vagas.':'Selecione os dias e o horário de atendimento.'}</div>`;
     h += `<div class="sllbl" style="margin-bottom:8px">Dias de atendimento</div><div class="slots" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">`;
     DIAS.forEach(function(d){ const on=S.obDraft.dias.indexOf(d.k)>=0; h += `<div class="slot ${on?"sel":""}" data-a="diaToggle:${d.k}">${d.t}</div>`; });
     h += `</div>`;
@@ -746,7 +754,17 @@ async function saveOnboarding(){
   try{ const { data } = await sb.auth.getSession(); uid = data && data.session && data.session.user ? data.session.user.id : null; }catch(e){}
   if(!uid){
     S.role="account"; S.accStage="signup"; render();
-    setTimeout(function(){ const el=document.getElementById("accerr"); if(el) el.innerHTML='<div class="errmsg">Crie sua conta (ou entre) para cadastrar sua barbearia.</div>'; }, 60);
+    setTimeout(function(){ const el=document.getElementById("accerr"); if(el) el.innerHTML='<div class="errmsg">Crie sua conta (ou entre) para concluir seu cadastro.</div>'; }, 60);
+    return;
+  }
+  // Freelancer: não cria barbearia — salva o perfil e abre o painel de oportunidades
+  if(d.tipo==="freelancer"){
+    profile = d;
+    saveFreela(d);
+    S.obStep=null; S.obDraft=null;
+    S.freelaAviso = true;
+    S.role="barber"; S.tab="rede"; S.redeView=null;
+    render();
     return;
   }
   if(sb){
@@ -815,10 +833,22 @@ function renderAccount(){
     h += `<button class="btn out" data-a="accHome" style="margin-top:10px">Voltar</button>`;
   } else {
     if(em){
+      const freela = isFreela() && !(S.myShops && S.myShops.length);
       h += `<h1 class="bg">Sua conta</h1><div class="lr"><span class="c">Logado como</span><b>${em}</b></div>`;
       if(em.toLowerCase()===ADMIN_EMAIL) h += `<button class="btn" data-a="toAdmin">Painel do administrador</button>`;
-      h += `<button class="btn out" data-a="toCreate" style="margin-top:10px">Cadastrar nova barbearia</button>`;
+      if(freela){
+        h += `<button class="btn" data-a="freelaPanel" style="margin-top:10px">Ver oportunidades</button>`;
+        h += `<button class="btn out" data-a="expandir" style="margin-top:10px">Expandir meu negócio</button>`;
+        h += `<div class="hint" style="margin-top:6px;text-align:center">Cadastre sua barbearia, monte equipe e contrate freelancers.</div>`;
+      } else {
+        h += `<button class="btn out" data-a="toCreate" style="margin-top:10px">Cadastrar nova barbearia</button>`;
+      }
       h += `<button class="btn out" data-a="accLogout" style="margin-top:10px">Sair</button>`;
+      if(freela){
+        h += `<div class="sllbl" style="margin:20px 0 8px">Meu perfil</div>`;
+        h += `<div class="lr" style="justify-content:center;color:var(--mut)">Perfil de freelancer ativo — visível para as barbearias.</div>`;
+        main.innerHTML = h; return;
+      }
       h += `<div class="sllbl" style="margin:20px 0 8px">Minhas barbearias</div>`;
       if(S.myShops===undefined || S.myShops===null){
         h += `<div class="lr" style="justify-content:center;color:var(--mut)">Carregando…</div>`;
@@ -874,6 +904,7 @@ function renderBarber(){
   const list = appointments.filter(a=>a.barbeiro==="b1");
   let h="";
   if(S.cadastroAviso){ h+=`<div class="ok" style="margin-bottom:14px"><b>Barbearia cadastrada!</b><p>Em análise para aprovação. Configure sua equipe, serviços e horários aqui no painel (aba Conta).</p></div>`; S.cadastroAviso=false; }
+  if(S.freelaAviso){ h+=`<div class="ok" style="margin-bottom:14px"><b>Perfil criado!</b><p>Você já pode se candidatar às vagas abertas. Seu perfil fica visível para as barbearias da região.</p></div>`; S.freelaAviso=false; }
   if(S.tab==="equipe"){
     h+=`<div class="eyebrow">${profile?profile.nomeFantasia:'Barbearia'}</div><h1 class="bg">Equipe</h1>
       <div class="hint" style="margin-top:-8px;margin-bottom:14px">Cadastre seus freelancers e defina a comissão de cada um.</div>`;
@@ -1029,6 +1060,18 @@ function renderBarber(){
   }
   if(S.tab==="conta"){
     const em = S.authEmail || "";
+    if(!dono && isFreela() && !(S.myShops && S.myShops.length)){
+      h+=`<div class="eyebrow">Minha conta</div><h1 class="bg">Meu perfil</h1>`;
+      if(em) h+=`<div class="lr"><span class="c">Logado como</span><b>${em}</b></div>`;
+      const fp = profile || loadFreela() || {};
+      if(fp.respNome) h+=`<div class="lr"><span class="c">Nome</span><b>${fp.respNome}</b></div>`;
+      if(fp.mobilePhone) h+=`<div class="lr"><span class="c">WhatsApp</span><b>${fp.mobilePhone}</b></div>`;
+      h+=`<div class="lr"><span class="c">Tipo</span><b>Freelancer</b></div>`;
+      h+=`<button class="btn out" data-a="expandir" style="margin-top:14px">Expandir meu negócio</button>`;
+      h+=`<div class="hint" style="margin-top:6px;text-align:center">Cadastre sua barbearia, monte equipe e contrate freelancers.</div>`;
+      h+=`<button class="btn out" data-a="accLogout" style="margin-top:10px">Sair</button>`;
+      main.innerHTML=h; return;
+    }
     h+=`<div class="eyebrow">Minha conta</div><h1 class="bg">Sua barbearia</h1>`;
     if(em) h+=`<div class="lr"><span class="c">Logado como</span><b>${em}</b></div>`;
     h+=`<div class="sllbl" style="margin:18px 0 8px">Minhas barbearias</div>`;
@@ -1536,6 +1579,8 @@ main.addEventListener("click", e=>{
   else if(a==="accLogout"){ accLogout(); return; }
   else if(a==="account"){ goMinhaConta(); return; }
   else if(a==="toCreate"){ S.role="chooseType"; S.barberType=null; S.obStep=null; S.obDraft=null; render(); return; }
+  else if(a==="freelaPanel"){ if(!profile) profile=loadFreela(); S.role="barber"; S.tab="rede"; render(); return; }
+  else if(a==="expandir"){ S.barberType="dono"; S.role="onboarding"; S.obStep=null; S.obDraft=null; render(); return; }
   else if(a==="toAdmin"){ S.role="admin"; render(); admLoad(); return; }
   else if(a.startsWith("admToggle:")){ const p=a.split(":"); admToggle(p[1], p[2]==="1"); return; }
   else if(a.startsWith("admDel:")){ admDelShop(a.slice(7)); return; }
@@ -1601,6 +1646,7 @@ async function goMinhaConta(){
   if(!S.authEmail){ S.role="account"; S.accStage="home"; render(); return; }
   if(S.myShops===undefined || S.myShops===null){ await loadMyShops(); }
   if(S.myShops && S.myShops.length){ openDash(S.myShops[0].id); }
+  else if(isFreela()){ if(!profile) profile=loadFreela(); S.role="barber"; S.tab="rede"; render(); }
   else { S.role="account"; S.accStage="home"; render(); }
 }
 // Seta de voltar no cabeçalho — só aparece onde há para onde voltar
