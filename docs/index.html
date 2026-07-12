@@ -1223,62 +1223,62 @@ function renderAccount(){
   tabbar.style.display="none"; steps.style.display="none";
   const stage = S.accStage || "home";
   const em = S.authEmail || "";
+  let st = stage;
+  if(st==="login") st="home";                        // login é a tela padrão
+  if(st==="signup" && !S.acctType) st="signupType";  // sem perfil escolhido: volta a perguntar
   let h = `<div class="eyebrow">Minha conta</div>`;
-  if(stage==="login"){
+  if(em){
+    const freela = isFreela() && !(S.myShops && S.myShops.length);
+    h += `<h1 class="bg">Sua conta</h1><div class="lr"><span class="c">Logado como</span><b>${em}</b></div>`;
+    if(em.toLowerCase()===ADMIN_EMAIL) h += `<button class="btn" data-a="toAdmin">Painel do administrador</button>`;
+    if(freela){
+      h += `<button class="btn" data-a="freelaPanel" style="margin-top:10px">Ver oportunidades</button>`;
+      h += `<button class="btn out" data-a="expandir" style="margin-top:10px">Expandir meu negócio</button>`;
+      h += `<div class="hint" style="margin-top:6px;text-align:center">Cadastre sua barbearia, monte equipe e contrate freelancers.</div>`;
+    } else {
+      h += `<button class="btn out" data-a="toCreate" style="margin-top:10px">Cadastrar nova barbearia</button>`;
+    }
+    h += `<button class="btn out" data-a="accLogout" style="margin-top:10px">Sair</button>`;
+    if(freela){
+      h += `<div class="sllbl" style="margin:20px 0 8px">Meu perfil</div>`;
+      h += `<div class="lr" style="justify-content:center;color:var(--mut)">Perfil de freelancer ativo — visível para as barbearias.</div>`;
+      main.innerHTML = h; return;
+    }
+    h += `<div class="sllbl" style="margin:20px 0 8px">Minhas barbearias</div>`;
+    if(S.myShops===undefined || S.myShops===null){
+      h += `<div class="lr" style="justify-content:center;color:var(--mut)">Carregando…</div>`;
+      loadMyShops();
+    } else if(!S.myShops.length){
+      h += `<div class="lr" style="justify-content:center;color:var(--mut)">Você ainda não tem barbearia cadastrada.</div>`;
+    } else S.myShops.forEach(function(sp){
+      const stc = sp.ativo ? `<span class="chip ok">Ativa</span>` : `<span class="chip" style="background:rgba(255,159,10,.2);color:#a86400">Inativa</span>`;
+      h += `<div class="box" style="margin-bottom:10px"><div style="display:flex;align-items:center;gap:10px"><div style="flex:1"><div class="nm" style="font-size:15px">${sp.nome||"(sem nome)"}</div><div class="sb">${sp.bairro||""}</div></div>${stc}</div>
+        <div class="fidwrap" style="justify-content:flex-end;gap:8px;flex-wrap:wrap"><button class="btn small" data-a="dash:${sp.id}">Painel da barbearia</button><button class="btn out small" data-a="shopEdit:${sp.id}:account">Editar</button><button class="btn out small" data-a="admBarb:${sp.id}:account">Equipe</button><button class="btn out small" data-a="svcOpen:${sp.id}:account">Serviços</button></div></div>`;
+    });
+  } else if(st==="signupType"){
+    // criar conta: primeiro escolher o perfil
+    h += `<h1 class="bg">Criar conta</h1><div class="hint" style="margin-top:-6px;margin-bottom:14px">Antes de continuar, qual é o seu perfil?</div>`;
+    h += `<div class="tile" data-a="ptype:cliente"><div class="ic">${ICONS.combo||ICONS.user}</div><div style="flex:1"><div class="nm">Sou cliente</div><div class="tags">Agendar cortes e acompanhar minha fidelidade</div></div><div class="ar">&rsaquo;</div></div>`;
+    h += `<div class="tile" data-a="ptype:studio"><div class="ic">${ICONS.shop}</div><div style="flex:1"><div class="nm">Sou barbeiro</div><div class="tags">Tenho uma barbearia e quero gerenciá-la</div></div><div class="ar">&rsaquo;</div></div>`;
+    h += `<div class="tile" data-a="ptype:freelancer"><div class="ic">${ICONS.user}</div><div style="flex:1"><div class="nm">Sou freelancer</div><div class="tags">Encontrar vagas em barbearias</div></div><div class="ar">&rsaquo;</div></div>`;
+    h += `<div class="hint" style="text-align:center;margin-top:14px">Já tem conta? <b data-a="accLogin" style="color:#A6791E;cursor:pointer">Acessar</b></div>`;
+  } else if(st==="signup"){
+    const PT = { cliente:"Sou cliente", studio:"Sou barbeiro", freelancer:"Sou freelancer" };
+    h += `<h1 class="bg">Criar conta</h1><div class="lr"><span class="c">Perfil</span><span><b>${PT[S.acctType]||''}</b> · <b data-a="ptypeBack" style="color:#A6791E;cursor:pointer">trocar</b></span></div><div id="accerr"></div>`;
+    if(S.acctType==="cliente") h += field("accNome","Nome completo",{ph:"Seu nome e sobrenome",val:S.signupNome||""});
+    h += field("accEmail","E-mail",{type:"email",ph:"seu@email.com",val:S.loginEmail||""});
+    h += field("accPass","Senha",{type:"password",ph:"Mínimo 6 caracteres",val:""});
+    if(S.acctType==="studio") h += `<div class="formnote">No próximo passo você preenche os dados da barbearia (endereço, horários…).</div>`;
+    else if(S.acctType==="freelancer") h += `<div class="formnote">No próximo passo você monta seu perfil de freelancer (foto, serviços, região…).</div>`;
+    h += `<button class="btn" data-a="doSignup">Criar conta</button>`;
+    h += `<div class="hint" style="text-align:center;margin-top:12px">Já tem conta? <b data-a="accLogin" style="color:#A6791E;cursor:pointer">Acessar</b></div>`;
+  } else {
+    // login comum (tela padrão de "Minha conta")
     h += `<h1 class="bg">Acessar conta</h1><div class="hint" style="margin-top:-6px;margin-bottom:12px">Entre com seu e-mail e senha.</div><div id="accerr"></div>`;
     h += field("accEmail","E-mail",{type:"email",ph:"seu@email.com",val:S.loginEmail||""});
     h += field("accPass","Senha",{type:"password",ph:"Sua senha",val:""});
     h += `<button class="btn" data-a="doLogin">Entrar</button>`;
     h += `<div class="hint" style="text-align:center;margin-top:12px">Não tem conta? <b data-a="accSignup" style="color:#A6791E;cursor:pointer">Criar conta</b></div>`;
-    h += `<button class="btn out" data-a="accHome" style="margin-top:10px">Voltar</button>`;
-  } else if(stage==="signup"){
-    h += `<h1 class="bg">Criar conta</h1><div class="hint" style="margin-top:-6px;margin-bottom:12px">Crie seu acesso com e-mail e senha.</div><div id="accerr"></div>`;
-    h += field("accEmail","E-mail",{type:"email",ph:"seu@email.com",val:S.loginEmail||""});
-    h += field("accPass","Senha",{type:"password",ph:"Mínimo 6 caracteres",val:""});
-    h += `<button class="btn" data-a="doSignup">Criar conta</button>`;
-    h += `<div class="hint" style="text-align:center;margin-top:12px">Já tem conta? <b data-a="accLogin" style="color:#A6791E;cursor:pointer">Acessar</b></div>`;
-    h += `<button class="btn out" data-a="accHome" style="margin-top:10px">Voltar</button>`;
-  } else {
-    if(em){
-      const freela = isFreela() && !(S.myShops && S.myShops.length);
-      h += `<h1 class="bg">Sua conta</h1><div class="lr"><span class="c">Logado como</span><b>${em}</b></div>`;
-      if(em.toLowerCase()===ADMIN_EMAIL) h += `<button class="btn" data-a="toAdmin">Painel do administrador</button>`;
-      if(freela){
-        h += `<button class="btn" data-a="freelaPanel" style="margin-top:10px">Ver oportunidades</button>`;
-        h += `<button class="btn out" data-a="expandir" style="margin-top:10px">Expandir meu negócio</button>`;
-        h += `<div class="hint" style="margin-top:6px;text-align:center">Cadastre sua barbearia, monte equipe e contrate freelancers.</div>`;
-      } else {
-        h += `<button class="btn out" data-a="toCreate" style="margin-top:10px">Cadastrar nova barbearia</button>`;
-      }
-      h += `<button class="btn out" data-a="accLogout" style="margin-top:10px">Sair</button>`;
-      if(freela){
-        h += `<div class="sllbl" style="margin:20px 0 8px">Meu perfil</div>`;
-        h += `<div class="lr" style="justify-content:center;color:var(--mut)">Perfil de freelancer ativo — visível para as barbearias.</div>`;
-        main.innerHTML = h; return;
-      }
-      h += `<div class="sllbl" style="margin:20px 0 8px">Minhas barbearias</div>`;
-      if(S.myShops===undefined || S.myShops===null){
-        h += `<div class="lr" style="justify-content:center;color:var(--mut)">Carregando…</div>`;
-        loadMyShops();
-      } else if(!S.myShops.length){
-        h += `<div class="lr" style="justify-content:center;color:var(--mut)">Você ainda não tem barbearia cadastrada.</div>`;
-      } else S.myShops.forEach(function(sp){
-        const st = sp.ativo ? `<span class="chip ok">Ativa</span>` : `<span class="chip" style="background:rgba(255,159,10,.2);color:#a86400">Inativa</span>`;
-        h += `<div class="box" style="margin-bottom:10px"><div style="display:flex;align-items:center;gap:10px"><div style="flex:1"><div class="nm" style="font-size:15px">${sp.nome||"(sem nome)"}</div><div class="sb">${sp.bairro||""}</div></div>${st}</div>
-          <div class="fidwrap" style="justify-content:flex-end;gap:8px;flex-wrap:wrap"><button class="btn small" data-a="dash:${sp.id}">Painel da barbearia</button><button class="btn out small" data-a="shopEdit:${sp.id}:account">Editar</button><button class="btn out small" data-a="admBarb:${sp.id}:account">Equipe</button><button class="btn out small" data-a="svcOpen:${sp.id}:account">Serviços</button></div></div>`;
-      });
-    } else if(!S.acctType){
-      h += `<h1 class="bg">Quem é você?</h1><div class="hint" style="margin-top:-6px;margin-bottom:14px">Escolha seu perfil para entrar ou criar sua conta.</div>`;
-      h += `<div class="tile" data-a="ptype:cliente"><div class="ic">${ICONS.combo||ICONS.user}</div><div style="flex:1"><div class="nm">Sou cliente</div><div class="tags">Agendar cortes e acompanhar minha fidelidade</div></div><div class="ar">&rsaquo;</div></div>`;
-      h += `<div class="tile" data-a="ptype:freelancer"><div class="ic">${ICONS.user}</div><div style="flex:1"><div class="nm">Sou freelancer</div><div class="tags">Encontrar vagas em barbearias</div></div><div class="ar">&rsaquo;</div></div>`;
-      h += `<div class="tile" data-a="ptype:studio"><div class="ic">${ICONS.shop}</div><div style="flex:1"><div class="nm">Tenho studio</div><div class="tags">Gerenciar minha barbearia e equipe</div></div><div class="ar">&rsaquo;</div></div>`;
-    } else {
-      const PT = { cliente:"Cliente", freelancer:"Freelancer", studio:"Studio" };
-      h += `<h1 class="bg">Sua conta</h1><div class="lr"><span class="c">Perfil</span><b>${PT[S.acctType]}</b></div>`;
-      h += `<button class="btn" data-a="accLogin">Acessar conta</button>`;
-      h += `<button class="btn out" data-a="accSignup">Criar conta</button>`;
-      h += `<div class="hint" style="text-align:center;margin-top:12px;cursor:pointer" data-a="ptypeBack">Trocar perfil</div>`;
-    }
   }
   main.innerHTML = h;
 }
@@ -1295,6 +1295,7 @@ async function doLogin(){
 }
 async function doSignup(){
   const {email,pass,e,p}=accCreds();
+  if(S.acctType==="cliente"){ const n=document.getElementById("accNome"); if(!n||!n.value.trim()){ if(n)n.classList.add("err"); accErr("Informe seu nome."); return; } S.signupNome=n.value.trim(); }
   if(!email){ if(e)e.classList.add("err"); return; }
   if(!pass || pass.length<6){ if(p)p.classList.add("err"); accErr("A senha precisa ter ao menos 6 caracteres."); return; }
   S.loginEmail=email;
@@ -1756,7 +1757,7 @@ function demoBtn(action){ return isAdmin() ? `<button class="btn out" data-a="${
 const DEMO_OB = {
   nomeFantasia:"Barbearia Demo", cpfCnpj:"12345678000190", companyType:"MEI", incomeValue:"8000",
   respNome:"Maycon Demo", email:"demo@seubarba.app", mobilePhone:"(11) 98888-7777", birthDate:"10/05/1990",
-  postalCode:"01001-000", addressNumber:"100", address:"Praça da Sé", province:"Sé",
+  postalCode:"01001-000", addressNumber:"100", address:"Praça da Sé", province:"Sé", lat:-23.5505, lng:-46.6333,
   abre:"08:00", fecha:"19:00", almocoIni:"12:00", almocoFim:"13:00", dias:["seg","ter","qua","qui","sex","sab"]
 };
 // preenche os campos da barbearia (cadastro por partes) para o admin avançar rápido
@@ -2376,16 +2377,16 @@ main.addEventListener("click", e=>{
   else if(a==="agBuscar"){ const el=document.getElementById("agZap"); buscarMeusAg(el?el.value:""); return; }
   else if(a==="toMinhaConta"){ S.role="account"; S.accStage="home"; S.myShops=undefined; render(); return; }
   else if(a.startsWith("dash:")){ openDash(a.slice(5)); return; }
-  else if(a==="accLogin"){ S.accStage="login"; render(); return; }
-  else if(a==="accSignup"){ S.accStage="signup"; render(); return; }
+  else if(a==="accLogin"){ S.acctType=null; S.accStage="home"; render(); return; }
+  else if(a==="accSignup"){ S.acctType=null; S.accStage="signupType"; render(); return; }
   else if(a==="accHome"){ S.accStage="home"; render(); return; }
   else if(a==="doLogin"){ doLogin(); return; }
   else if(a==="doSignup"){ doSignup(); return; }
   else if(a==="accLogout"){ accLogout(); return; }
   else if(a==="account"){ goMinhaConta(); return; }
   else if(a==="toCreate"){ S.role="chooseType"; S.barberType=null; S.obStep=null; S.obDraft=null; render(); return; }
-  else if(a.startsWith("ptype:")){ S.acctType=a.slice(6); render(); return; }
-  else if(a==="ptypeBack"){ S.acctType=null; S.accStage="home"; render(); return; }
+  else if(a.startsWith("ptype:")){ S.acctType=a.slice(6); S.accStage="signup"; render(); return; }
+  else if(a==="ptypeBack"){ S.acctType=null; S.accStage="signupType"; render(); return; }
   else if(a==="cpEdit"){ S.cpEdit=!S.cpEdit; render(); return; }
   else if(a==="cpSave"){ saveCName(); return; }
   else if(a==="cpAgendar"){ goHome(); return; }
@@ -2509,7 +2510,13 @@ function navBack(){
   if(S.role==="admin"){ S.role="account"; S.accStage="home"; render(); return; }
   if(S.role==="barber"||S.role==="clientPanel"){ goHome(); return; }
   if(S.role==="meusag"){ S.role="client"; render(); return; }
-  if(S.role==="account"){ if(S.accStage==="login"||S.accStage==="signup"){ S.accStage="home"; render(); } else { S.role="client"; render(); } return; }
+  if(S.role==="account"){
+    const stc=S.accStage||"home";
+    if(stc==="signup"){ S.acctType=null; S.accStage="signupType"; render(); }
+    else if(stc==="signupType"){ S.accStage="home"; render(); }
+    else { S.role="client"; render(); }
+    return;
+  }
   if(S.role==="client"){
     if(S.pixGen){ S.pixGen=false; render(); return; }
     if(S.step>1){ S.step--; render(); return; }
@@ -2538,7 +2545,9 @@ if(sb){ try{ refreshAuth(); sb.auth.onAuthStateChange(function(ev, session){ S.a
   S.loginPending=false;
   // grava o perfil escolhido antes do login (se a conta ainda não tiver um)
   if(S.acctType && !getPtype()) setPtype(S.acctType);
-  S.acctType=null; S.afterAuth=null;
+  // cliente: guarda o nome informado no cadastro
+  if(S.acctType==="cliente" && S.signupNome){ try{ localStorage.setItem(cnameKey(), S.signupNome); }catch(e){} }
+  S.acctType=null; S.afterAuth=null; S.signupNome="";
   routeByPerfil();
 } }); }catch(e){} }
 async function hydrate(){
